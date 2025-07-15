@@ -48,15 +48,53 @@ pdfmetrics.registerFont(TTFont("DejaVuSans", "fonts/DejaVuSans.ttf"))
 pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", "fonts/DejaVuSans-Bold.ttf"))
 
 # === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
-def extract_composition(text):
+def extract_composition(text: str) -> str | None:
+    """Возвращает состав товара из текста описания.
+
+    Parameters
+    ----------
+    text : str
+        Исходный текст описания.
+
+    Returns
+    -------
+    str | None
+        Найденное значение после ``"Состав:"`` или ``None``.
+    """
     match = re.search(r"Состав:([^\n\r]*)", text, re.IGNORECASE)
     return match.group(1).strip() if match else None
 
-def extract_manufacturer(text):
+def extract_manufacturer(text: str) -> str | None:
+    """Извлекает строку производителя из описания.
+
+    Parameters
+    ----------
+    text : str
+        Текст, содержащий информацию об изготовителе.
+
+    Returns
+    -------
+    str | None
+        Адрес производителя либо ``None``.
+    """
     match = re.search(r"(?:Адрес изготовления|Адрес производителя|Адрес производитель):([^\n\r]*)", text, re.IGNORECASE)
     return match.group(1).strip() if match else None
 
-def extract_measurements(text, target_size):
+def extract_measurements(text: str, target_size: str | None) -> str | None:
+    """Получить строку замеров для указанного размера.
+
+    Parameters
+    ----------
+    text : str
+        Описание товара с блоком ``"Замеры:"``.
+    target_size : str | None
+        Размер, по которому ищем замеры.
+
+    Returns
+    -------
+    str | None
+        Отформатированная строка замеров или ``None``.
+    """
     log_lines = []
     if not target_size:
         log_lines.append("[SKIP] Нет значения размера\n")
@@ -105,16 +143,29 @@ def extract_measurements(text, target_size):
     write_measurement_log(log_lines)
     return None
 
-def write_measurement_log(log_lines):
+def write_measurement_log(log_lines: list[str]) -> None:
+    """Записывает отладочную информацию по замерам в файл."""
     with open("measurements.log", "a", encoding="utf-8") as log:
         log.writelines(log_lines)
 
-def extract_age_as_size(text):
+def extract_age_as_size(text: str) -> str | None:
+    """Пытается определить размер по упоминанию возраста."""
     match = re.search(r"Возраст:?\s*([\d\-–\s]+лет?)", text, re.IGNORECASE)
     return match.group(1).strip() if match else None
 
-def load_care_image(path_or_url):
-    """Return :class:`ImageReader` from local file or URL if possible."""
+def load_care_image(path_or_url: str | None) -> ImageReader | None:
+    """Загружает и возвращает изображение инструкций по уходу.
+
+    Parameters
+    ----------
+    path_or_url : str | None
+        Путь к файлу или URL изображения.
+
+    Returns
+    -------
+    :class:`ImageReader` | None
+        Объект изображения или ``None`` при ошибке загрузки.
+    """
     if not path_or_url:
         return None
     try:
@@ -128,8 +179,9 @@ def load_care_image(path_or_url):
         return ImageReader(img)
     except Exception:
         return None
-    
-def extract_other_attributes(meta, exclude_keys, slug_to_label):
+
+def extract_other_attributes(meta: dict, exclude_keys: list[str], slug_to_label: dict[str, str]) -> str | None:
+    """Формирует строку дополнительных атрибутов товара."""
     attributes = []
     translation = {
         "color": "Цвет",
@@ -150,8 +202,8 @@ def extract_other_attributes(meta, exclude_keys, slug_to_label):
     return ", ".join(attributes) if attributes else None
     
 
-def get_product_quantity(product, use_stock_quantity=True):
-    """Return how many labels should be printed for a product."""
+def get_product_quantity(product: dict, use_stock_quantity: bool = True) -> int:
+    """Возвращает количество этикеток, которое нужно напечатать."""
     if not use_stock_quantity:
         return 1
     raw_qty = product['meta'].get('_stock', '1')
