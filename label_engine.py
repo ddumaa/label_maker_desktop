@@ -16,6 +16,10 @@ from reportlab.graphics.barcode import createBarcodeDrawing
 from reportlab.graphics import renderPDF
 from database_service import DatabaseService, DatabaseConnectionError
 from pathlib import Path
+import logging
+
+# Логгер модуля используется для вывода предупреждений и ошибок.
+logger = logging.getLogger(__name__)
 
 # === НАСТРОЙКИ ===
 
@@ -402,7 +406,8 @@ class LabelGenerator:
             buffer.showPage()
 
         buffer.save()
-        print(f"Сгенерировано: {self.output_file}")
+        # Предупреждение о пути сгенерированного PDF-файла.
+        logger.warning("Сгенерировано: %s", self.output_file)
 
     def generate_labels_entry(self, skus: list[str]) -> None:
         """\
@@ -418,7 +423,8 @@ class LabelGenerator:
         try:
             products = self.db_service.get_products_by_skus(skus)
         except DatabaseConnectionError as exc:
-            print(f"[DB ERROR] {exc}")
+            # Ошибка подключения к БД отображается в логах.
+            logger.error("[DB ERROR] %s", exc)
             return
 
         # Расширяем список товаров с учётом количества
@@ -438,5 +444,6 @@ def generate_labels_entry(skus, settings, db_config):
     try:
         generator.generate_labels_entry(skus)
     except DatabaseConnectionError as exc:
-        print(f"[DB ERROR] {exc}")
+        # Логируем проблемы с подключением к БД при верхнеуровневом вызове.
+        logger.error("[DB ERROR] %s", exc)
 
