@@ -37,12 +37,22 @@ class DatabaseService:
         DatabaseConnectionError
             Если библиотека ``mysql-connector-python`` не установлена.
         """
+        self._ensure_connector()
+        self._db_config = db_config
+        logger.debug("DatabaseService initialized with config: %s", db_config)
+
+    def _ensure_connector(self) -> None:
+        """Проверяет наличие установленного MySQL-коннектора.
+
+        Raises
+        ------
+        DatabaseConnectionError
+            Если библиотека ``mysql-connector-python`` не установлена.
+        """
         if mysql is None:
             raise DatabaseConnectionError(
                 "Библиотека 'mysql-connector-python' не установлена"
             ) from _IMPORT_ERROR
-        self._db_config = db_config
-        logger.debug("DatabaseService initialized with config: %s", db_config)
 
     def _connect(self):
         """Return a MySQL connection using stored configuration.
@@ -52,10 +62,7 @@ class DatabaseService:
         DatabaseConnectionError
             Если не удаётся подключиться к БД.
         """
-        if mysql is None:
-            raise DatabaseConnectionError(
-                "Библиотека 'mysql-connector-python' не установлена"
-            ) from _IMPORT_ERROR
+        self._ensure_connector()
         try:
             logger.debug("Opening MySQL connection")
             conn = mysql.connector.connect(**self._db_config)
@@ -68,10 +75,7 @@ class DatabaseService:
 
     def check_connection(self) -> None:
         """Проверить корректность параметров подключения."""
-        if mysql is None:
-            raise DatabaseConnectionError(
-                "Библиотека 'mysql-connector-python' не установлена"
-            ) from _IMPORT_ERROR
+        self._ensure_connector()
 
         try:
             logger.debug("Checking database connection")
@@ -87,10 +91,7 @@ class DatabaseService:
         Возвращает словарь ``slug -> название`` для переданных slug'ов.
         Возвращается пустой словарь, если ``term_slugs`` пуст.
         """
-        if mysql is None:
-            raise DatabaseConnectionError(
-                "Библиотека 'mysql-connector-python' не установлена"
-            ) from _IMPORT_ERROR
+        self._ensure_connector()
 
         if not term_slugs:
             return {}
@@ -120,10 +121,7 @@ class DatabaseService:
         Получает данные товаров для указанных SKU.
         Возвращает словарь ``product_id -> данные``.
         """
-        if mysql is None:
-            raise DatabaseConnectionError(
-                "Библиотека 'mysql-connector-python' не установлена"
-            ) from _IMPORT_ERROR
+        self._ensure_connector()
 
         if not skus:
             return {}
