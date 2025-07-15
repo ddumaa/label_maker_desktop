@@ -32,5 +32,7 @@ target/*
 docs/*
 logs/*
 node_modules/*
+__pycache__/
+tests/__pycache__/
 
 db_config.json
