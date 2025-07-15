@@ -1,5 +1,10 @@
 from PyQt5 import QtWidgets, QtGui, QtCore
-import sys, os, json, tempfile, mysql.connector
+import sys
+import os
+import json
+import tempfile
+import mysql.connector
+from config_loader import load_settings, load_db_config
 
 from preview_engine import generate_preview_pdf, convert_pdf_to_image
 from label_engine import generate_labels_entry
@@ -12,11 +17,9 @@ class LabelMakerApp(QtWidgets.QMainWindow):
         self.setWindowTitle("Label Maker")
         self.setGeometry(100, 100, 1000, 600)
 
-        # Загрузка конфигов
-        with open("settings.json", "r", encoding="utf-8") as f:
-            self.settings = json.load(f)
-        with open("db_config.json", "r", encoding="utf-8") as f:
-            self.db_config = json.load(f)
+        # Load application configuration
+        self.settings = load_settings()
+        self.db_config = load_db_config()
 
         # UI
         main_layout = QtWidgets.QHBoxLayout()
