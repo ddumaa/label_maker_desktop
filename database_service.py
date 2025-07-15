@@ -8,6 +8,12 @@ from typing import Iterable, Dict
 import mysql.connector
 
 
+class DatabaseConnectionError(Exception):
+    """Raised when connecting to the MySQL database fails."""
+
+    pass
+
+
 class DatabaseService:
     """Сервис доступа к базе данных.
 
@@ -19,6 +25,21 @@ class DatabaseService:
         """Сохраняет параметры подключения к базе данных."""
         self._db_config = db_config
 
+    def _connect(self):
+        """Return a MySQL connection using stored configuration.
+
+        Raises
+        ------
+        DatabaseConnectionError
+            Если не удаётся подключиться к БД.
+        """
+        try:
+            return mysql.connector.connect(**self._db_config)
+        except mysql.connector.Error as exc:
+            raise DatabaseConnectionError(
+                f"Не удалось подключиться к базе данных: {exc}"
+            ) from exc
+
     def get_term_labels(self, term_slugs: Iterable[str]) -> Dict[str, str]:
         """\
         Возвращает словарь ``slug -> название`` для переданных slug'ов.
@@ -27,7 +48,7 @@ class DatabaseService:
         if not term_slugs:
             return {}
 
-        conn = mysql.connector.connect(**self._db_config)
+        conn = self._connect()
         cursor = conn.cursor()
 
         placeholders = ",".join(["%s"] * len(term_slugs))
@@ -48,7 +69,7 @@ class DatabaseService:
         if not skus:
             return {}
 
-        conn = mysql.connector.connect(**self._db_config)
+        conn = self._connect()
         cursor = conn.cursor(dictionary=True)
 
         placeholders = ",".join(["%s"] * len(skus))
