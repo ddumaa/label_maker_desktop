@@ -22,16 +22,41 @@ def render_preview(skus, settings, db_config, single=True):
         return img_path  # Временный путь
 
 def generate_preview_pdf(pdf_path, skus, settings, db_config, generator_func=generate_labels_entry):
-    """Generate a PDF preview for the provided SKUs."""
+    """Generate a PDF preview for the provided SKUs.
+
+    Parameters
+    ----------
+    pdf_path : str
+        Destination path for the preview PDF.
+    skus : Iterable[str] | str
+        Collection of SKUs or a single SKU string.
+    settings : dict
+        Label generation settings. ``output_file`` will be temporarily
+        overridden with ``pdf_path``.
+    db_config : dict
+        Database connection parameters.
+    generator_func : Callable
+        Function used to generate labels. Defaults to
+        :func:`generate_labels_entry`.
+    """
+
     if isinstance(skus, str):
         sku_list = [skus]
     else:
         sku_list = list(skus)
-    generator_func(sku_list, settings, db_config)
-    # Переименовываем файл, если необходимо
-    output_file = settings.get("output_file", "labels.pdf")
-    if os.path.exists(output_file):
-        os.replace(output_file, pdf_path)
+
+    # Save original output file and override it with the preview path.
+    original_output = settings.get("output_file")
+    settings["output_file"] = pdf_path
+
+    try:
+        generator_func(sku_list, settings, db_config)
+    finally:
+        # Restore the original output_file setting if it existed.
+        if original_output is not None:
+            settings["output_file"] = original_output
+        else:
+            settings.pop("output_file", None)
 
 def convert_pdf_to_image(pdf_path):
     """Convert the first page of a PDF to a PIL image."""
