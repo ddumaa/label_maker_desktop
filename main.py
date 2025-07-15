@@ -66,7 +66,14 @@ class LabelMakerApp(QtWidgets.QMainWindow):
         left_layout.addWidget(self.sku_list)
         
         self.db_status_label = QtWidgets.QLabel()
-        left_layout.addWidget(self.db_status_label)
+        self.test_conn_button = QtWidgets.QPushButton("Тест подключения")
+        self.test_conn_button.clicked.connect(self.test_db_connection)
+
+        # Группа для отображения текущего состояния БД и запуска проверки
+        db_status_layout = QtWidgets.QHBoxLayout()
+        db_status_layout.addWidget(self.db_status_label)
+        db_status_layout.addWidget(self.test_conn_button)
+        left_layout.addLayout(db_status_layout)
         # Проверяем подключение к БД только если конфигурация загружена
         if db_loaded:
             self.update_db_status()
@@ -264,29 +271,42 @@ class LabelMakerApp(QtWidgets.QMainWindow):
                 json.dump(self.settings, f, indent=2, ensure_ascii=False)
             self.log_output.append("💾 Настройки этикетки обновлены")
 
-    def update_db_status(self):
-        """Проверяет подключение к БД и обновляет индикатор в интерфейсе.
+    def update_db_status(self) -> bool:
+        """Обновляет индикатор подключения к базе данных.
 
-        Parameters
-        ----------
-        self : LabelMakerApp
-
-        Side effects
-        ------------
-        Изменяет текст и цвет метки ``db_status_label`` в зависимости
-        от результата попытки подключения.
+        Возвращает ``True`` при успешном соединении, иначе ``False``.
+        Метод реализует отдельную ответственность — проверку состояния БД
+        и обновление визуального статуса.
         """
         try:
             service = DatabaseService(self.db_config)
             service.check_connection()
             self.db_status_label.setText("🟢 Подключено к БД")
             self.db_status_label.setStyleSheet("color: green;")
+            return True
         except DatabaseConnectionError:
             self.db_status_label.setText("🔴 Нет подключения к БД")
             self.db_status_label.setStyleSheet("color: red;")
+            return False
         except Exception:
             self.db_status_label.setText("🔴 Нет подключения к БД")
             self.db_status_label.setStyleSheet("color: red;")
+            return False
+
+    def test_db_connection(self) -> None:
+        """Тестирует соединение с базой данных и сообщает результат.
+
+        Метод предназначен для ручного запуска пользователем. Сначала
+        обновляется индикатор состояния, затем результат отображается в
+        текстовом логе приложения.
+        """
+
+        # Сначала обновляем индикатор состояния, затем логируем итог
+        is_connected = self.update_db_status()
+        if is_connected:
+            self.log_output.append("✅ Соединение с БД успешно")
+        else:
+            self.log_output.append("❌ Не удалось подключиться к БД")
 
 
 def run_gui():
