@@ -5,6 +5,7 @@ class LabelSettingsDialog(QtWidgets.QDialog):
     """Dialog window for editing PDF label parameters."""
 
     def __init__(self, parent=None, current_settings=None):
+        """Create dialog with current label settings."""
         super().__init__(parent)
         self.setWindowTitle("Настройки этикетки")
         self.setModal(True)
@@ -50,6 +51,9 @@ class LabelSettingsDialog(QtWidgets.QDialog):
         self.labels_per_page.setMaximum(100)
         self.labels_per_page.setValue(current_settings.get("labels_per_page", 3))
 
+        self.use_stock_checkbox = QtWidgets.QCheckBox("Учитывать количество на складе")
+        self.use_stock_checkbox.setChecked(current_settings.get("use_stock_quantity", True))
+
         self.care_image_input = QtWidgets.QLineEdit(current_settings.get("care_image_path", ""))
         self.browse_button = QtWidgets.QPushButton("📁")
         self.browse_button.clicked.connect(self.select_image)
@@ -68,6 +72,7 @@ class LabelSettingsDialog(QtWidgets.QDialog):
         layout.addRow("Отступ снизу (мм):", self.bottom_margin)
         layout.addRow("Имя PDF-файла:", self.output_file)
         layout.addRow("Этикеток на странице:", self.labels_per_page)
+        layout.addRow(self.use_stock_checkbox)
         layout.addRow("Изображение ухода (путь или URL):", care_layout)
 
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Save | QtWidgets.QDialogButtonBox.Cancel)
@@ -78,11 +83,18 @@ class LabelSettingsDialog(QtWidgets.QDialog):
         self.setLayout(layout)
 
     def select_image(self):
-        filepath, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Выбрать изображение", "", "Images (*.png *.jpg *.jpeg)")
+        """Open a file dialog to choose care instructions image."""
+        filepath, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Выбрать изображение",
+            "",
+            "Images (*.png *.jpg *.jpeg)"
+        )
         if filepath:
             self.care_image_input.setText(filepath)
 
     def get_settings(self):
+        """Return a settings dictionary based on user input."""
         return {
             "page_width_mm": self.page_width.value(),
             "page_height_mm": self.page_height.value(),
@@ -94,5 +106,6 @@ class LabelSettingsDialog(QtWidgets.QDialog):
             "top_margin_mm": self.top_margin.value(),
             "output_file": self.output_file.text(),
             "care_image_path": self.care_image_input.text(),
-            "labels_per_page": self.labels_per_page.value()
+            "labels_per_page": self.labels_per_page.value(),
+            "use_stock_quantity": self.use_stock_checkbox.isChecked()
         }
