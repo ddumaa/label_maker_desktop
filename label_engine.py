@@ -14,7 +14,7 @@ import json
 from reportlab.graphics.shapes import Drawing
 from reportlab.graphics.barcode import createBarcodeDrawing
 from reportlab.graphics import renderPDF
-from database_service import DatabaseService
+from database_service import DatabaseService, DatabaseConnectionError
 from pathlib import Path
 
 # === НАСТРОЙКИ ===
@@ -415,7 +415,11 @@ class LabelGenerator:
         Сервис БД передается через конструктор.
         """
         # Загружаем данные товаров из базы
-        products = self.db_service.get_products_by_skus(skus)
+        try:
+            products = self.db_service.get_products_by_skus(skus)
+        except DatabaseConnectionError as exc:
+            print(f"[DB ERROR] {exc}")
+            return
 
         # Расширяем список товаров с учётом количества
         expanded_products: list[dict] = []
@@ -431,5 +435,8 @@ def generate_labels_entry(skus, settings, db_config):
     """Высокоуровневая функция запуска генерации этикеток."""
     db_service = DatabaseService(db_config)
     generator = LabelGenerator(settings, db_service)
-    generator.generate_labels_entry(skus)
+    try:
+        generator.generate_labels_entry(skus)
+    except DatabaseConnectionError as exc:
+        print(f"[DB ERROR] {exc}")
 

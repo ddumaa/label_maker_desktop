@@ -8,6 +8,7 @@ from config_loader import load_settings, load_db_config
 
 from preview_engine import generate_preview_pdf, convert_pdf_to_image
 from label_engine import generate_labels_entry
+from database_service import DatabaseConnectionError
 from db_dialog import DBConfigDialog
 from label_settings import LabelSettingsDialog
 
@@ -171,6 +172,8 @@ class LabelMakerApp(QtWidgets.QMainWindow):
                 image_qt = QtGui.QImage(image.tobytes("raw", "RGB"), image.width, image.height, QtGui.QImage.Format_RGB888)
                 pixmap = QtGui.QPixmap.fromImage(image_qt)
                 self.image_label.setPixmap(pixmap.scaled(self.image_label.size(), QtCore.Qt.KeepAspectRatio))
+        except DatabaseConnectionError as exc:
+            QtWidgets.QMessageBox.critical(self, "Ошибка БД", str(exc))
         except Exception as e:
             self.log_output.append(f"❌ Ошибка при превью: {e}")
 
@@ -187,6 +190,8 @@ class LabelMakerApp(QtWidgets.QMainWindow):
                 image_qt = QtGui.QImage(image.tobytes("raw", "RGB"), image.width, image.height, QtGui.QImage.Format_RGB888)
                 pixmap = QtGui.QPixmap.fromImage(image_qt)
                 self.image_label.setPixmap(pixmap.scaled(self.image_label.size(), QtCore.Qt.KeepAspectRatio))
+        except DatabaseConnectionError as exc:
+            QtWidgets.QMessageBox.critical(self, "Ошибка БД", str(exc))
         except Exception as e:
             self.log_output.append(f"❌ Ошибка при превью: {e}")
 
@@ -215,6 +220,8 @@ class LabelMakerApp(QtWidgets.QMainWindow):
             if sys.platform == "win32":
                 os.startfile(self.settings['output_file'])
 
+        except DatabaseConnectionError as exc:
+            QtWidgets.QMessageBox.critical(self, "Ошибка БД", str(exc))
         except Exception as e:
             self.log_output.append(f"❌ Ошибка генерации: {e}")
             QtWidgets.QMessageBox.critical(self, "Ошибка", f"Не удалось сгенерировать PDF:\n{str(e)}")
