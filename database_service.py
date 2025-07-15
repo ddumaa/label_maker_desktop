@@ -32,6 +32,9 @@ class DatabaseService:
     def __init__(self, db_config: Dict):
         """Сохраняет параметры подключения к базе данных.
 
+        При инициализации конфигурация выводится в лог с маскированием
+        пароля, чтобы избежать утечки чувствительных данных.
+
         Raises
         ------
         DatabaseConnectionError
@@ -39,7 +42,18 @@ class DatabaseService:
         """
         self._ensure_connector()
         self._db_config = db_config
-        logger.debug("DatabaseService initialized with config: %s", db_config)
+
+        # Для логирования конфигурации не выводим пароль.
+        safe_config = self._mask_password(db_config)
+        logger.debug("DatabaseService initialized with config: %s", safe_config)
+
+    @staticmethod
+    def _mask_password(config: Dict) -> Dict:
+        """Возвращает копию конфигурации с скрытым паролем."""
+        redacted = dict(config)
+        if "password" in redacted:
+            redacted["password"] = "***"
+        return redacted
 
     def _ensure_connector(self) -> None:
         """Проверяет наличие установленного MySQL-коннектора.
