@@ -10,11 +10,11 @@ import os
 import re
 import io
 import requests
-import mysql.connector
 import json
 from reportlab.graphics.shapes import Drawing
 from reportlab.graphics.barcode import createBarcodeDrawing
 from reportlab.graphics import renderPDF
+from database_service import DatabaseService
 from pathlib import Path
 
 # === НАСТРОЙКИ ===
@@ -145,73 +145,6 @@ def extract_other_attributes(meta, exclude_keys, slug_to_label):
 
     return ", ".join(attributes) if attributes else None
     
-def get_term_labels(term_slugs, db_config):
-    """Return mapping slug -> human label."""
-    if not term_slugs:
-        return {}
-
-    conn = mysql.connector.connect(**db_config)
-    cursor = conn.cursor()
-
-    format_strings = ','.join(['%s'] * len(term_slugs))
-    query = f"SELECT slug, name FROM wp_terms WHERE slug IN ({format_strings})"
-    cursor.execute(query, list(term_slugs))
-
-    result = {slug: name for slug, name in cursor.fetchall()}
-    
-    cursor.close()
-    conn.close()
-    return result
-
-# === ПОДКЛЮЧЕНИЕ К БД ===
-def get_products_by_skus(skus, db_config):
-    """Fetch product data for the given SKUs."""
-    conn = mysql.connector.connect(**db_config)
-    cursor = conn.cursor(dictionary=True)
-
-    format_strings = ','.join(['%s'] * len(skus))
-    query = f"""
-        SELECT p.ID, p.post_title, p.post_parent, pm.meta_key, pm.meta_value
-        FROM wp_posts p
-        JOIN wp_postmeta pm ON p.ID = pm.post_id
-        WHERE (pm.meta_key IN ('_sku', '_price', '_regular_price', '_sale_price', '_product_attributes', '_variation_description', '_stock')
-               OR pm.meta_key LIKE 'attribute_%')
-        AND p.post_type = 'product_variation'
-        AND pm.post_id IN (
-            SELECT post_id FROM wp_postmeta WHERE meta_key = '_sku' AND meta_value IN ({format_strings})
-        )
-    """
-    cursor.execute(query, skus)
-
-    products = {}
-    parent_ids = set()
-    for row in cursor.fetchall():
-        pid = row['ID']
-        if pid not in products:
-            products[pid] = {
-                'id': pid,
-                'parent': row['post_parent'],
-                'meta': {},
-                'title': row['post_title']
-            }
-        products[pid]['meta'][row['meta_key']] = row['meta_value']
-        parent_ids.add(row['post_parent'])
-
-    # Получаем названия родительских товаров
-    if parent_ids:
-        parent_query = f"SELECT ID, post_title, post_content FROM wp_posts WHERE ID IN ({','.join(map(str, parent_ids))})"
-        cursor.execute(parent_query)
-        parents = {row['ID']: {'title': row['post_title'], 'content': row['post_content']} for row in cursor.fetchall()}
-        for p in products.values():
-            parent = parents.get(p['parent'])
-            if parent:
-                p['base_title'] = parent['title']
-                p['content'] = parent['content']
-
-    cursor.close()
-    conn.close()
-    return products
-
 
 def get_product_quantity(product, use_stock_quantity=True):
     """Return how many labels should be printed for a product."""
@@ -232,7 +165,7 @@ class LabelGenerator:
     сохраняются как атрибуты экземпляра и используются при генерации.
     """
 
-    def __init__(self, settings: dict):
+    def __init__(self, settings: dict, db_service: "DatabaseService"):
         # Сохраняем все параметры, конвертируя миллиметры в пункты
         self.page_width = settings.get("page_width_mm", DEFAULT_PAGE_WIDTH_MM) * mm
         self.page_height = settings.get("page_height_mm", DEFAULT_PAGE_HEIGHT_MM) * mm
@@ -247,20 +180,21 @@ class LabelGenerator:
         self.labels_per_page = settings.get("labels_per_page", DEFAULT_LABELS_PER_PAGE)
         self.use_stock_quantity = settings.get("use_stock_quantity", True)
 
+        # Экземпляр сервиса для работы с базой данных
+        self.db_service = db_service
+
         # Ограничения высоты строки
         self.MIN_LINE_HEIGHT = self.min_line_height
         self.MAX_LINE_HEIGHT = 4.0 * mm
 
-    def generate_labels(self, products: dict[int, dict], db_config: dict) -> None:
+    def generate_labels(self, products: dict[int, dict]) -> None:
         """\
         Сформировать PDF из переданного набора товаров.
 
         Параметры
         ----------
         products : dict[int, dict]
-            Словарь товаров, полученный из :func:`get_products_by_skus`.
-        db_config : dict
-            Параметры подключения к базе данных.
+            Словарь товаров, полученный из :meth:`DatabaseService.get_products_by_skus`.
         """
         # Подготавливаем canvas для рисования
         buffer = canvas.Canvas(self.output_file, pagesize=(self.page_width, self.page_height))
@@ -277,7 +211,8 @@ class LabelGenerator:
                 if key.startswith("attribute_") and value.strip():
                     all_slugs.add(value.strip())
 
-        slug_to_label = get_term_labels(all_slugs, db_config)
+        # Получаем человекочитаемые названия терминов через сервис базы данных
+        slug_to_label = self.db_service.get_term_labels(all_slugs)
 
         for idx, product in enumerate(products_list):
             # Рассчитываем позицию этикетки на странице
@@ -469,7 +404,7 @@ class LabelGenerator:
         buffer.save()
         print(f"Сгенерировано: {self.output_file}")
 
-    def generate_labels_entry(self, skus: list[str], db_config: dict) -> None:
+    def generate_labels_entry(self, skus: list[str]) -> None:
         """\
         Точка входа для генерации этикеток по списку SKU.
 
@@ -477,11 +412,10 @@ class LabelGenerator:
         ----------
         skus : list[str]
             Список артикулов, для которых нужно напечатать этикетки.
-        db_config : dict
-            Параметры подключения к базе данных.
+        Сервис БД передается через конструктор.
         """
         # Загружаем данные товаров из базы
-        products = get_products_by_skus(skus, db_config)
+        products = self.db_service.get_products_by_skus(skus)
 
         # Расширяем список товаров с учётом количества
         expanded_products: list[dict] = []
@@ -490,11 +424,12 @@ class LabelGenerator:
             expanded_products.extend([product] * qty)
 
         mapping = {i: p for i, p in enumerate(expanded_products)}
-        self.generate_labels(mapping, db_config)
+        self.generate_labels(mapping)
 
 
 def generate_labels_entry(skus, settings, db_config):
-    """Высокоуровневая функция для совместимости с существующим кодом."""
-    generator = LabelGenerator(settings)
-    generator.generate_labels_entry(skus, db_config)
+    """Высокоуровневая функция запуска генерации этикеток."""
+    db_service = DatabaseService(db_config)
+    generator = LabelGenerator(settings, db_service)
+    generator.generate_labels_entry(skus)
 
