@@ -40,6 +40,16 @@ class DatabaseService:
                 f"Не удалось подключиться к базе данных: {exc}"
             ) from exc
 
+    def check_connection(self) -> None:
+        """Verify that connection parameters are valid by opening a connection.
+
+        The method immediately closes the connection after opening it.  Any
+        errors raised during connection are rethrown as
+        :class:`DatabaseConnectionError`.
+        """
+        conn = self._connect()
+        conn.close()
+
     def get_term_labels(self, term_slugs: Iterable[str]) -> Dict[str, str]:
         """\
         Возвращает словарь ``slug -> название`` для переданных slug'ов.

@@ -8,7 +8,7 @@ from config_loader import load_settings, load_db_config
 
 from preview_engine import generate_preview_pdf, convert_pdf_to_image
 from label_engine import generate_labels_entry
-from database_service import DatabaseConnectionError
+from database_service import DatabaseConnectionError, DatabaseService
 from db_dialog import DBConfigDialog
 from label_settings import LabelSettingsDialog
 
@@ -277,12 +277,14 @@ class LabelMakerApp(QtWidgets.QMainWindow):
         от результата попытки подключения.
         """
         try:
-            import mysql.connector
-            conn = mysql.connector.connect(**self.db_config)
-            conn.close()
+            service = DatabaseService(self.db_config)
+            service.check_connection()
             self.db_status_label.setText("🟢 Подключено к БД")
             self.db_status_label.setStyleSheet("color: green;")
-        except Exception as e:
+        except DatabaseConnectionError:
+            self.db_status_label.setText("🔴 Нет подключения к БД")
+            self.db_status_label.setStyleSheet("color: red;")
+        except Exception:
             self.db_status_label.setText("🔴 Нет подключения к БД")
             self.db_status_label.setStyleSheet("color: red;")
 
