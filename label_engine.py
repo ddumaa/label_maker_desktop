@@ -217,6 +217,17 @@ def get_products_by_skus(skus, db_config):
     conn.close()
     return products
 
+
+def get_product_quantity(product, use_stock_quantity=True):
+    """Return how many labels should be printed for a product."""
+    if not use_stock_quantity:
+        return 1
+    raw_qty = product['meta'].get('_stock', '1')
+    try:
+        return int(float(raw_qty)) if raw_qty else 1
+    except ValueError:
+        return 1
+
 # === ГЕНЕРАЦИЯ PDF ===
 def generate_labels(products, db_config, labels_per_page):
     """Render PDF labels for provided products.
@@ -448,7 +459,8 @@ def generate_labels_entry(skus, settings, db_config):
     db_config : dict
         Database connection parameters.
     settings must contain ``labels_per_page`` defining how many labels
-    are placed on one page.
+    are placed on one page. ``use_stock_quantity`` controls whether the
+    product stock value determines label count.
     """
     global page_width, page_height, label_width, font_size
     global min_line_height, barcode_height, bottom_margin, top_margin
@@ -466,6 +478,7 @@ def generate_labels_entry(skus, settings, db_config):
     output_file = settings.get("output_file", "labels.pdf")
     CARE_IMAGE_PATH = settings.get("care_image_path", "care.png")
     labels_per_page = settings.get("labels_per_page", 3)
+    use_stock_quantity = settings.get("use_stock_quantity", True)
     MIN_LINE_HEIGHT = min_line_height
     MAX_LINE_HEIGHT = 4.0 * mm
 
@@ -473,12 +486,7 @@ def generate_labels_entry(skus, settings, db_config):
 
     expanded_products = []
     for product in products.values():
-        sku = product['meta'].get('_sku')
-        raw_qty = product['meta'].get('_stock', '1')
-        try:
-            qty = int(float(raw_qty)) if raw_qty else 1
-        except ValueError:
-            qty = 1
+        qty = get_product_quantity(product, use_stock_quantity)
         expanded_products.extend([product] * qty)
 
     generate_labels({i: p for i, p in enumerate(expanded_products)}, db_config, labels_per_page)

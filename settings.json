@@ -9,6 +9,7 @@
   "top_margin_mm": 2,
   "output_file": "labels.pdf",
   "care_image_path": "care.png",
-  "labels_per_page": 3
+  "labels_per_page": 3,
+  "use_stock_quantity": true
 }
 
