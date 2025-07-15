@@ -19,9 +19,40 @@ class LabelMakerApp(QtWidgets.QMainWindow):
         self.setWindowTitle("Label Maker")
         self.setGeometry(100, 100, 1000, 600)
 
-        # Load application configuration
-        self.settings = load_settings()
-        self.db_config = load_db_config()
+        # Load application configuration with error handling
+        # Загрузка настроек и параметров БД может завершиться ошибкой,
+        # поэтому оборачиваем вызовы в try/except и отображаем диалог с ошибкой.
+        try:
+            self.settings = load_settings()
+        except FileNotFoundError as exc:
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не найден файл настроек:\n{exc}"
+            )
+            # При ошибке продолжаем работу с пустыми настройками
+            self.settings = {}
+
+        # Флаг, успешно ли загружена конфигурация БД
+        db_loaded = True
+        try:
+            self.db_config = load_db_config()
+        except FileNotFoundError as exc:
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Не найден файл конфигурации БД:\n{exc}"
+            )
+            self.db_config = {}
+            db_loaded = False
+        except mysql.connector.Error as exc:
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Ошибка",
+                f"Ошибка MySQL при загрузке конфигурации:\n{exc}"
+            )
+            self.db_config = {}
+            db_loaded = False
 
         # UI
         main_layout = QtWidgets.QHBoxLayout()
@@ -35,7 +66,9 @@ class LabelMakerApp(QtWidgets.QMainWindow):
         
         self.db_status_label = QtWidgets.QLabel()
         left_layout.addWidget(self.db_status_label)
-        self.update_db_status()
+        # Проверяем подключение к БД только если конфигурация загружена
+        if db_loaded:
+            self.update_db_status()
 
         self.load_button = QtWidgets.QPushButton("📁 Загрузить SKU")
         self.load_button.clicked.connect(self.load_sku_file)
