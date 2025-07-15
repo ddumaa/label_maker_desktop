@@ -27,6 +27,23 @@ class LabelSettingsDialog(QtWidgets.QDialog):
         self.font_size.setMaximum(100)
         self.font_size.setValue(current_settings.get("font_size", 6))
 
+        self.min_line_height = QtWidgets.QDoubleSpinBox()
+        self.min_line_height.setDecimals(1)
+        self.min_line_height.setMaximum(100)
+        self.min_line_height.setValue(current_settings.get("min_line_height_mm", 2.0))
+
+        self.barcode_height = QtWidgets.QSpinBox()
+        self.barcode_height.setMaximum(100)
+        self.barcode_height.setValue(current_settings.get("barcode_height_mm", 6))
+
+        self.bottom_margin = QtWidgets.QSpinBox()
+        self.bottom_margin.setMaximum(100)
+        self.bottom_margin.setValue(current_settings.get("bottom_margin_mm", 0))
+
+        self.top_margin = QtWidgets.QSpinBox()
+        self.top_margin.setMaximum(100)
+        self.top_margin.setValue(current_settings.get("top_margin_mm", 2))
+
         self.output_file = QtWidgets.QLineEdit(current_settings.get("output_file", "labels.pdf"))
 
         self.care_image_input = QtWidgets.QLineEdit(current_settings.get("care_image_path", ""))
@@ -41,6 +58,10 @@ class LabelSettingsDialog(QtWidgets.QDialog):
         layout.addRow("Высота страницы (мм):", self.page_height)
         layout.addRow("Ширина этикетки (мм):", self.label_width)
         layout.addRow("Размер шрифта:", self.font_size)
+        layout.addRow("Мин. высота строки (мм):", self.min_line_height)
+        layout.addRow("Высота штрихкода (мм):", self.barcode_height)
+        layout.addRow("Отступ сверху (мм):", self.top_margin)
+        layout.addRow("Отступ снизу (мм):", self.bottom_margin)
         layout.addRow("Имя PDF-файла:", self.output_file)
         layout.addRow("Изображение ухода (путь или URL):", care_layout)
 
@@ -62,6 +83,10 @@ class LabelSettingsDialog(QtWidgets.QDialog):
             "page_height_mm": self.page_height.value(),
             "label_width_mm": self.label_width.value(),
             "font_size": self.font_size.value(),
+            "min_line_height_mm": self.min_line_height.value(),
+            "barcode_height_mm": self.barcode_height.value(),
+            "bottom_margin_mm": self.bottom_margin.value(),
+            "top_margin_mm": self.top_margin.value(),
             "output_file": self.output_file.text(),
             "care_image_path": self.care_image_input.text()
         }
