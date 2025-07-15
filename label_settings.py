@@ -2,6 +2,8 @@ from PyQt5 import QtWidgets
 import os
 
 class LabelSettingsDialog(QtWidgets.QDialog):
+    """Dialog window for editing PDF label parameters."""
+
     def __init__(self, parent=None, current_settings=None):
         super().__init__(parent)
         self.setWindowTitle("Настройки этикетки")
@@ -27,7 +29,7 @@ class LabelSettingsDialog(QtWidgets.QDialog):
 
         self.output_file = QtWidgets.QLineEdit(current_settings.get("output_file", "labels.pdf"))
 
-        self.care_image_input = QtWidgets.QLineEdit(current_settings.get("care_image_url", ""))
+        self.care_image_input = QtWidgets.QLineEdit(current_settings.get("care_image_path", ""))
         self.browse_button = QtWidgets.QPushButton("📁")
         self.browse_button.clicked.connect(self.select_image)
 
@@ -40,7 +42,7 @@ class LabelSettingsDialog(QtWidgets.QDialog):
         layout.addRow("Ширина этикетки (мм):", self.label_width)
         layout.addRow("Размер шрифта:", self.font_size)
         layout.addRow("Имя PDF-файла:", self.output_file)
-        layout.addRow("Изображение ухода (URL или путь):", care_layout)
+        layout.addRow("Изображение ухода (путь или URL):", care_layout)
 
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Save | QtWidgets.QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
@@ -61,5 +63,5 @@ class LabelSettingsDialog(QtWidgets.QDialog):
             "label_width_mm": self.label_width.value(),
             "font_size": self.font_size.value(),
             "output_file": self.output_file.text(),
-            "care_image_url": self.care_image_input.text()
+            "care_image_path": self.care_image_input.text()
         }

@@ -1,6 +1,8 @@
 from PyQt5 import QtWidgets
 
 class DBConfigDialog(QtWidgets.QDialog):
+    """Dialog used for configuring MySQL connection parameters."""
+
     def __init__(self, parent=None, current_config=None):
         super().__init__(parent)
         self.setWindowTitle("Настройки подключения к БД")

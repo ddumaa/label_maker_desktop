@@ -22,7 +22,7 @@ def render_preview(skus, settings, db_config, single=True):
         return img_path  # Временный путь
 
 def generate_preview_pdf(pdf_path, sku, settings, db_config, generator_func=generate_labels_entry):
-    # Генерирует PDF с одной этикеткой
+    """Generate a one-label PDF and store it at ``pdf_path``."""
     generator_func([sku], settings, db_config)
     # Переименовываем файл, если необходимо
     output_file = settings.get("output_file", "labels.pdf")
@@ -30,5 +30,6 @@ def generate_preview_pdf(pdf_path, sku, settings, db_config, generator_func=gene
         os.replace(output_file, pdf_path)
 
 def convert_pdf_to_image(pdf_path):
+    """Convert the first page of a PDF to a PIL image."""
     images = convert_from_path(pdf_path, dpi=150)
     return images[0] if images else None
