@@ -3,6 +3,11 @@ import sys
 import os
 import json
 import tempfile
+
+from logging_setup import configure_logging
+
+configure_logging()
+
 import mysql.connector
 from config_loader import load_settings, load_db_config
 
