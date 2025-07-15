@@ -108,6 +108,18 @@ class LabelMakerApp(QtWidgets.QMainWindow):
         self.setCentralWidget(main_widget)
 
     def load_sku_file(self):
+        """Загружает текстовый файл со SKU и заполняет список.
+
+        Parameters
+        ----------
+        self : LabelMakerApp
+            Экземпляр главного окна.
+
+        Side effects
+        ------------
+        Открывает диалог выбора файла, заполняет ``sku_list`` и
+        добавляет запись в ``log_output``.
+        """
         filepath, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Выберите файл SKU", "", "Text Files (*.txt)")
         if filepath:
             with open(filepath, "r", encoding="utf-8") as f:
@@ -117,6 +129,17 @@ class LabelMakerApp(QtWidgets.QMainWindow):
             self.log_output.append(f"✅ Загружено SKU: {len(skus)}")
 
     def preview_selected_sku(self):
+        """Отрисовывает превью для выбранного SKU в текущем режиме.
+
+        Parameters
+        ----------
+        self : LabelMakerApp
+
+        Side effects
+        ------------
+        Вызывает отображение одной этикетки или целого листа и пишет
+        сообщение в ``log_output``.
+        """
         sku = self.sku_list.currentItem().text()
         mode = self.preview_mode.currentIndex()
         if mode == 0:
@@ -127,6 +150,12 @@ class LabelMakerApp(QtWidgets.QMainWindow):
             self.show_page_preview(sku)
 
     def update_preview(self):
+        """Обновляет превью выбранного SKU при смене режима.
+
+        Side effects
+        ------------
+        При наличии выбранного элемента вызывает ``preview_selected_sku``.
+        """
         if self.sku_list.currentItem():
             self.preview_selected_sku()
 
@@ -162,6 +191,17 @@ class LabelMakerApp(QtWidgets.QMainWindow):
             self.log_output.append(f"❌ Ошибка при превью: {e}")
 
     def generate_pdf(self):
+        """Генерирует итоговый PDF по всем SKU из списка.
+
+        Parameters
+        ----------
+        self : LabelMakerApp
+
+        Side effects
+        ------------
+        Создаёт файл PDF, выводит уведомления и на Windows открывает
+        сгенерированный файл.
+        """
         skus = [self.sku_list.item(i).text() for i in range(self.sku_list.count())]
         if not skus:
             QtWidgets.QMessageBox.warning(self, "Внимание", "Список артикулов пуст.")
@@ -178,8 +218,19 @@ class LabelMakerApp(QtWidgets.QMainWindow):
         except Exception as e:
             self.log_output.append(f"❌ Ошибка генерации: {e}")
             QtWidgets.QMessageBox.critical(self, "Ошибка", f"Не удалось сгенерировать PDF:\n{str(e)}")
-            
+
     def show_db_config_dialog(self):
+        """Отображает диалог настроек БД и сохраняет результат.
+
+        Parameters
+        ----------
+        self : LabelMakerApp
+
+        Side effects
+        ------------
+        Сохраняет конфигурацию в файл, обновляет статус подключения и
+        пишет сообщение в ``log_output``.
+        """
         dialog = DBConfigDialog(self, self.db_config)
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             self.db_config = dialog.get_config()
@@ -187,8 +238,18 @@ class LabelMakerApp(QtWidgets.QMainWindow):
                 json.dump(self.db_config, f, indent=2)
             self.log_output.append("💾 Настройки БД обновлены")
             self.update_db_status()
-            
+
     def show_label_settings_dialog(self):
+        """Открывает диалог настроек этикетки и применяет изменения.
+
+        Parameters
+        ----------
+        self : LabelMakerApp
+
+        Side effects
+        ------------
+        Сохраняет новые параметры в файл и добавляет запись в лог.
+        """
         dialog = LabelSettingsDialog(self, self.settings)
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             self.settings = dialog.get_settings()
@@ -197,6 +258,17 @@ class LabelMakerApp(QtWidgets.QMainWindow):
             self.log_output.append("💾 Настройки этикетки обновлены")
 
     def update_db_status(self):
+        """Проверяет подключение к БД и обновляет индикатор в интерфейсе.
+
+        Parameters
+        ----------
+        self : LabelMakerApp
+
+        Side effects
+        ------------
+        Изменяет текст и цвет метки ``db_status_label`` в зависимости
+        от результата попытки подключения.
+        """
         try:
             import mysql.connector
             conn = mysql.connector.connect(**self.db_config)
