@@ -46,6 +46,10 @@ class LabelSettingsDialog(QtWidgets.QDialog):
 
         self.output_file = QtWidgets.QLineEdit(current_settings.get("output_file", "labels.pdf"))
 
+        self.labels_per_page = QtWidgets.QSpinBox()
+        self.labels_per_page.setMaximum(100)
+        self.labels_per_page.setValue(current_settings.get("labels_per_page", 3))
+
         self.care_image_input = QtWidgets.QLineEdit(current_settings.get("care_image_path", ""))
         self.browse_button = QtWidgets.QPushButton("📁")
         self.browse_button.clicked.connect(self.select_image)
@@ -63,6 +67,7 @@ class LabelSettingsDialog(QtWidgets.QDialog):
         layout.addRow("Отступ сверху (мм):", self.top_margin)
         layout.addRow("Отступ снизу (мм):", self.bottom_margin)
         layout.addRow("Имя PDF-файла:", self.output_file)
+        layout.addRow("Этикеток на странице:", self.labels_per_page)
         layout.addRow("Изображение ухода (путь или URL):", care_layout)
 
         buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Save | QtWidgets.QDialogButtonBox.Cancel)
@@ -88,5 +93,6 @@ class LabelSettingsDialog(QtWidgets.QDialog):
             "bottom_margin_mm": self.bottom_margin.value(),
             "top_margin_mm": self.top_margin.value(),
             "output_file": self.output_file.text(),
-            "care_image_path": self.care_image_input.text()
+            "care_image_path": self.care_image_input.text(),
+            "labels_per_page": self.labels_per_page.value()
         }

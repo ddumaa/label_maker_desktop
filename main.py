@@ -90,18 +90,36 @@ class LabelMakerApp(QtWidgets.QMainWindow):
             self.log_output.append(f"👁 Превью одной этикетки: {sku}")
             self.show_label_preview(sku)
         else:
-            self.log_output.append(f"📄 Полный лист — пока не реализовано")
+            self.log_output.append(f"📄 Превью целого листа: {sku}")
+            self.show_page_preview(sku)
 
     def update_preview(self):
         if self.sku_list.currentItem():
             self.preview_selected_sku()
 
     def show_label_preview(self, sku):
+        """Preview a single label for ``sku``."""
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
                 pdf_path = tmp_pdf.name
 
             generate_preview_pdf(pdf_path, sku, self.settings, self.db_config, generate_labels_entry)
+            image = convert_pdf_to_image(pdf_path)
+            if image:
+                image_qt = QtGui.QImage(image.tobytes("raw", "RGB"), image.width, image.height, QtGui.QImage.Format_RGB888)
+                pixmap = QtGui.QPixmap.fromImage(image_qt)
+                self.image_label.setPixmap(pixmap.scaled(self.image_label.size(), QtCore.Qt.KeepAspectRatio))
+        except Exception as e:
+            self.log_output.append(f"❌ Ошибка при превью: {e}")
+
+    def show_page_preview(self, sku):
+        """Preview a full page filled with the same SKU."""
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
+                pdf_path = tmp_pdf.name
+
+            count = self.settings.get("labels_per_page", 3)
+            generate_preview_pdf(pdf_path, [sku] * count, self.settings, self.db_config, generate_labels_entry)
             image = convert_pdf_to_image(pdf_path)
             if image:
                 image_qt = QtGui.QImage(image.tobytes("raw", "RGB"), image.width, image.height, QtGui.QImage.Format_RGB888)

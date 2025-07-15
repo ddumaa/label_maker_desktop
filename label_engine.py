@@ -41,6 +41,8 @@ min_line_height = 2.0 * mm
 barcode_height = 6 * mm
 bottom_margin = 0 * mm
 top_margin = 2 * mm
+# Number of labels rendered on one PDF page.
+labels_per_page = 3
 
 # === РЕГИСТРАЦИЯ ШРИФТОВ ===
 pdfmetrics.registerFont(TTFont("DejaVuSans", "fonts/DejaVuSans.ttf"))
@@ -216,8 +218,19 @@ def get_products_by_skus(skus, db_config):
     return products
 
 # === ГЕНЕРАЦИЯ PDF ===
-def generate_labels(products):
-    """Render PDF labels for provided products."""
+def generate_labels(products, db_config, labels_per_page):
+    """Render PDF labels for provided products.
+
+    Parameters
+    ----------
+    products : dict[int, dict]
+        Mapping of index to product metadata returned from
+        :func:`get_products_by_skus`.
+    db_config : dict
+        Connection parameters for MySQL.
+    labels_per_page : int
+        Number of labels rendered on a single PDF page.
+    """
     buffer = canvas.Canvas(output_file, pagesize=(page_width, page_height))
 
     # One-time attempt to load care instructions image either from a local path
@@ -241,7 +254,7 @@ def generate_labels(products):
     slug_to_label = get_term_labels(all_slugs, db_config)
 
     for idx, product in enumerate(products_list):
-        pos_in_page = idx % 3
+        pos_in_page = idx % labels_per_page
         x = pos_in_page * label_width
 
         if pos_in_page == 0 and idx != 0:
@@ -414,7 +427,7 @@ def generate_labels(products):
                 renderPDF.draw(bc, buffer, 0, 0)
                 buffer.restoreState()
                 
-    if len(products_list) % 3 != 0:
+    if len(products_list) % labels_per_page != 0:
         buffer.showPage()
 
     buffer.save()
@@ -434,10 +447,13 @@ def generate_labels_entry(skus, settings, db_config):
         washing instruction image.
     db_config : dict
         Database connection parameters.
+    settings must contain ``labels_per_page`` defining how many labels
+    are placed on one page.
     """
     global page_width, page_height, label_width, font_size
     global min_line_height, barcode_height, bottom_margin, top_margin
     global MIN_LINE_HEIGHT, MAX_LINE_HEIGHT, CARE_IMAGE_PATH, output_file
+    global labels_per_page
 
     page_width = settings.get("page_width_mm", 120) * mm
     page_height = settings.get("page_height_mm", 70) * mm
@@ -449,6 +465,7 @@ def generate_labels_entry(skus, settings, db_config):
     top_margin = settings.get("top_margin_mm", 2) * mm
     output_file = settings.get("output_file", "labels.pdf")
     CARE_IMAGE_PATH = settings.get("care_image_path", "care.png")
+    labels_per_page = settings.get("labels_per_page", 3)
     MIN_LINE_HEIGHT = min_line_height
     MAX_LINE_HEIGHT = 4.0 * mm
 
@@ -464,4 +481,4 @@ def generate_labels_entry(skus, settings, db_config):
             qty = 1
         expanded_products.extend([product] * qty)
 
-    generate_labels({i: p for i, p in enumerate(expanded_products)})
+    generate_labels({i: p for i, p in enumerate(expanded_products)}, db_config, labels_per_page)
