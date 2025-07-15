@@ -5,7 +5,15 @@ DatabaseService module responsible for communication with MySQL.
 from __future__ import annotations
 
 from typing import Iterable, Dict
-import mysql.connector
+import logging
+
+logger = logging.getLogger(__name__)
+
+try:
+    import mysql.connector
+except ModuleNotFoundError as exc:
+    mysql = None  # type: ignore
+    _IMPORT_ERROR = exc
 
 
 class DatabaseConnectionError(Exception):
@@ -22,8 +30,19 @@ class DatabaseService:
     """
 
     def __init__(self, db_config: Dict):
-        """Сохраняет параметры подключения к базе данных."""
+        """Сохраняет параметры подключения к базе данных.
+
+        Raises
+        ------
+        DatabaseConnectionError
+            Если библиотека ``mysql-connector-python`` не установлена.
+        """
+        if mysql is None:
+            raise DatabaseConnectionError(
+                "Библиотека 'mysql-connector-python' не установлена"
+            ) from _IMPORT_ERROR
         self._db_config = db_config
+        logger.debug("DatabaseService initialized with config: %s", db_config)
 
     def _connect(self):
         """Return a MySQL connection using stored configuration.
@@ -33,8 +52,15 @@ class DatabaseService:
         DatabaseConnectionError
             Если не удаётся подключиться к БД.
         """
+        if mysql is None:
+            raise DatabaseConnectionError(
+                "Библиотека 'mysql-connector-python' не установлена"
+            ) from _IMPORT_ERROR
         try:
-            return mysql.connector.connect(**self._db_config)
+            logger.debug("Opening MySQL connection")
+            conn = mysql.connector.connect(**self._db_config)
+            logger.debug("MySQL connection established")
+            return conn
         except mysql.connector.Error as exc:
             raise DatabaseConnectionError(
                 f"Не удалось подключиться к базе данных: {exc}"
@@ -42,10 +68,15 @@ class DatabaseService:
 
     def check_connection(self) -> None:
         """Проверить корректность параметров подключения."""
+        if mysql is None:
+            raise DatabaseConnectionError(
+                "Библиотека 'mysql-connector-python' не установлена"
+            ) from _IMPORT_ERROR
 
         try:
+            logger.debug("Checking database connection")
             with mysql.connector.connect(**self._db_config):
-                pass
+                logger.debug("Database connection successful")
         except mysql.connector.Error as exc:
             raise DatabaseConnectionError(
                 f"Не удалось подключиться к базе данных: {exc}"
@@ -56,10 +87,16 @@ class DatabaseService:
         Возвращает словарь ``slug -> название`` для переданных slug'ов.
         Возвращается пустой словарь, если ``term_slugs`` пуст.
         """
+        if mysql is None:
+            raise DatabaseConnectionError(
+                "Библиотека 'mysql-connector-python' не установлена"
+            ) from _IMPORT_ERROR
+
         if not term_slugs:
             return {}
 
         try:
+            logger.debug("Fetching term labels: %s", term_slugs)
             with mysql.connector.connect(**self._db_config) as conn:
                 with conn.cursor() as cursor:
                     # Формируем SQL-запрос для выборки терминов
@@ -70,7 +107,9 @@ class DatabaseService:
                     cursor.execute(query, list(term_slugs))
 
                     # Возвращаем словарь slug -> человекочитаемое имя
-                    return {slug: name for slug, name in cursor.fetchall()}
+                    result = {slug: name for slug, name in cursor.fetchall()}
+                    logger.debug("Terms fetched: %s", result)
+                    return result
         except mysql.connector.Error as exc:
             raise DatabaseConnectionError(
                 f"Не удалось подключиться к базе данных: {exc}"
@@ -81,10 +120,16 @@ class DatabaseService:
         Получает данные товаров для указанных SKU.
         Возвращает словарь ``product_id -> данные``.
         """
+        if mysql is None:
+            raise DatabaseConnectionError(
+                "Библиотека 'mysql-connector-python' не установлена"
+            ) from _IMPORT_ERROR
+
         if not skus:
             return {}
 
         try:
+            logger.debug("Fetching products for SKUs: %s", skus)
             with mysql.connector.connect(**self._db_config) as conn:
                 with conn.cursor(dictionary=True) as cursor:
                     placeholders = ",".join(["%s"] * len(skus))
@@ -135,6 +180,7 @@ class DatabaseService:
                                 product['base_title'] = parent['title']
                                 product['content'] = parent['content']
 
+                    logger.debug("Products fetched: %s", list(products.keys()))
                     return products
         except mysql.connector.Error as exc:
             raise DatabaseConnectionError(
