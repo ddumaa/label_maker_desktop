@@ -2,6 +2,10 @@ from label_engine import generate_labels_entry
 from database_service import DatabaseConnectionError
 import tempfile, os
 from pdf2image import convert_from_path
+import logging
+
+# Логгер модуля для вывода ошибок при генерации превью.
+logger = logging.getLogger(__name__)
 
 def render_preview(skus, settings, db_config, single=True):
     """
@@ -53,7 +57,8 @@ def generate_preview_pdf(pdf_path, skus, settings, db_config, generator_func=gen
     try:
         generator_func(sku_list, settings, db_config)
     except DatabaseConnectionError as exc:
-        print(f"[DB ERROR] {exc}")
+        # Выводим ошибку подключения к базе данных при формировании превью.
+        logger.error("[DB ERROR] %s", exc)
     finally:
         # Restore the original output_file setting if it existed.
         if original_output is not None:
