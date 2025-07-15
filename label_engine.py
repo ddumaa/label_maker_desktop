@@ -26,23 +26,18 @@ def load_skus_from_file(filepath):
     with open(filepath, "r", encoding="utf-8") as f:
         return [line.strip() for line in f if line.strip()]
 
-output_file = "labels.pdf"
-# Default path for the care image used on labels. Users can override this in
-# ``settings.json`` or via the settings dialog.
-CARE_IMAGE_PATH = "care.png"
-
-# === PDF НАСТРОЙКИ ===
-# Значения по умолчанию для размеров и отступов. Все параметры могут
-# быть переопределены через ``settings.json``. Единицы измерения - миллиметры.
-page_width, page_height = 120 * mm, 70 * mm
-label_width = 40 * mm
-font_size = 6
-min_line_height = 2.0 * mm
-barcode_height = 6 * mm
-bottom_margin = 0 * mm
-top_margin = 2 * mm
-# Number of labels rendered on one PDF page.
-labels_per_page = 3
+# Значения по умолчанию для настроек PDF-генератора
+DEFAULT_OUTPUT_FILE = "labels.pdf"
+DEFAULT_CARE_IMAGE_PATH = "care.png"
+DEFAULT_PAGE_WIDTH_MM = 120
+DEFAULT_PAGE_HEIGHT_MM = 70
+DEFAULT_LABEL_WIDTH_MM = 40
+DEFAULT_FONT_SIZE = 6
+DEFAULT_MIN_LINE_HEIGHT_MM = 2.0
+DEFAULT_BARCODE_HEIGHT_MM = 6
+DEFAULT_BOTTOM_MARGIN_MM = 0
+DEFAULT_TOP_MARGIN_MM = 2
+DEFAULT_LABELS_PER_PAGE = 3
 
 # === РЕГИСТРАЦИЯ ШРИФТОВ ===
 pdfmetrics.registerFont(TTFont("DejaVuSans", "fonts/DejaVuSans.ttf"))
@@ -228,265 +223,278 @@ def get_product_quantity(product, use_stock_quantity=True):
     except ValueError:
         return 1
 
-# === ГЕНЕРАЦИЯ PDF ===
-def generate_labels(products, db_config, labels_per_page):
-    """Render PDF labels for provided products.
 
-    Parameters
-    ----------
-    products : dict[int, dict]
-        Mapping of index to product metadata returned from
-        :func:`get_products_by_skus`.
-    db_config : dict
-        Connection parameters for MySQL.
-    labels_per_page : int
-        Number of labels rendered on a single PDF page.
+class LabelGenerator:
+    """\
+    Класс для генерации PDF с этикетками.
+
+    В конструктор передаются настройки из ``settings.json``. Все значения
+    сохраняются как атрибуты экземпляра и используются при генерации.
     """
-    buffer = canvas.Canvas(output_file, pagesize=(page_width, page_height))
 
-    # One-time attempt to load care instructions image either from a local path
-    # or an HTTP URL. Failures are silently ignored.
-    care_img = load_care_image(CARE_IMAGE_PATH)
+    def __init__(self, settings: dict):
+        # Сохраняем все параметры, конвертируя миллиметры в пункты
+        self.page_width = settings.get("page_width_mm", DEFAULT_PAGE_WIDTH_MM) * mm
+        self.page_height = settings.get("page_height_mm", DEFAULT_PAGE_HEIGHT_MM) * mm
+        self.label_width = settings.get("label_width_mm", DEFAULT_LABEL_WIDTH_MM) * mm
+        self.font_size = settings.get("font_size", DEFAULT_FONT_SIZE)
+        self.min_line_height = settings.get("min_line_height_mm", DEFAULT_MIN_LINE_HEIGHT_MM) * mm
+        self.barcode_height = settings.get("barcode_height_mm", DEFAULT_BARCODE_HEIGHT_MM) * mm
+        self.bottom_margin = settings.get("bottom_margin_mm", DEFAULT_BOTTOM_MARGIN_MM) * mm
+        self.top_margin = settings.get("top_margin_mm", DEFAULT_TOP_MARGIN_MM) * mm
+        self.output_file = settings.get("output_file", DEFAULT_OUTPUT_FILE)
+        self.care_image_path = settings.get("care_image_path", DEFAULT_CARE_IMAGE_PATH)
+        self.labels_per_page = settings.get("labels_per_page", DEFAULT_LABELS_PER_PAGE)
+        self.use_stock_quantity = settings.get("use_stock_quantity", True)
 
-    # Ограничения на высоту строки
-    MIN_LINE_HEIGHT = 2.0 * mm
-    MAX_LINE_HEIGHT = 4.0 * mm
+        # Ограничения высоты строки
+        self.MIN_LINE_HEIGHT = self.min_line_height
+        self.MAX_LINE_HEIGHT = 4.0 * mm
 
-    # Преобразуем товары в список для итерации по индексу
-    products_list = list(products.values())
+    def generate_labels(self, products: dict[int, dict], db_config: dict) -> None:
+        """\
+        Сформировать PDF из переданного набора товаров.
 
-    # Собираем все значения-слуги (через attribute_) для перевода
-    all_slugs = set()
-    for product in products.values():
-        for key, value in product['meta'].items():
-            if key.startswith("attribute_") and value.strip():
-                all_slugs.add(value.strip())
-                
-    slug_to_label = get_term_labels(all_slugs, db_config)
+        Параметры
+        ----------
+        products : dict[int, dict]
+            Словарь товаров, полученный из :func:`get_products_by_skus`.
+        db_config : dict
+            Параметры подключения к базе данных.
+        """
+        # Подготавливаем canvas для рисования
+        buffer = canvas.Canvas(self.output_file, pagesize=(self.page_width, self.page_height))
 
-    for idx, product in enumerate(products_list):
-        pos_in_page = idx % labels_per_page
-        x = pos_in_page * label_width
+        # Однократно пробуем загрузить изображение инструкций по уходу
+        care_img = load_care_image(self.care_image_path)
 
-        if pos_in_page == 0 and idx != 0:
+        products_list = list(products.values())
+
+        # Собираем все slug-значения атрибутов для последующего перевода
+        all_slugs = set()
+        for product in products.values():
+            for key, value in product['meta'].items():
+                if key.startswith("attribute_") and value.strip():
+                    all_slugs.add(value.strip())
+
+        slug_to_label = get_term_labels(all_slugs, db_config)
+
+        for idx, product in enumerate(products_list):
+            # Рассчитываем позицию этикетки на странице
+            pos_in_page = idx % self.labels_per_page
+            x = pos_in_page * self.label_width
+
+            # При переходе на новую строку выводим новую страницу
+            if pos_in_page == 0 and idx != 0:
+                buffer.showPage()
+
+            center_x = x + self.label_width / 2
+            current_y = self.page_height - self.top_margin
+
+            sku = product['meta'].get('_sku', 'N/A')
+            price = (
+                product['meta'].get('_price')
+                or product['meta'].get('_regular_price')
+                or product['meta'].get('_sale_price')
+                or '0.00'
+            )
+            base_title = product.get('base_title', product['title'])
+            description = product.get('content', '')
+
+            # Определяем значение размера
+            size_val = ""
+            for key in ["attribute_pa_razmer", "attribute_pa_size", "attribute_pa_rost"]:
+                if key in product['meta'] and product['meta'][key]:
+                    size_val = product['meta'][key]
+                    break
+            if not size_val:
+                size_val = extract_age_as_size(description)
+
+            art_and_size = f"Арт: {sku}"
+
+            def is_size_value(value: str) -> bool:
+                # Проверяем, является ли значение именно размером
+                if re.search(r"[A-Za-zА-Яа-я]", value):
+                    return True
+                if re.match(r"\d+\s*[\-–]\s*\d+", value):
+                    return True
+                try:
+                    return int(value) < 56
+                except ValueError:
+                    return False
+
+            size_attr_keys = ["attribute_pa_razmer", "attribute_pa_size", "attribute_pa_rost"]
+            if size_val:
+                label = "Размер" if is_size_value(size_val) else "Рост"
+                art_and_size += f" {label}: {size_val}"
+
+            other_attributes = extract_other_attributes(
+                product['meta'], exclude_keys=size_attr_keys, slug_to_label=slug_to_label
+            )
+            if other_attributes:
+                art_and_size += f", {other_attributes}"
+
+            composition = extract_composition(description) or "____________________"
+            manufacturer = (
+                extract_manufacturer(description)
+                or "____________________\n____________________\n____________________"
+            )
+            measurements = extract_measurements(description, size_val)
+
+            lines_defs = [
+                ("DejaVuSans-Bold", f"EAC {base_title}", "center"),
+                ("DejaVuSans-Bold", art_and_size, "left"),
+            ]
+
+            if measurements:
+                lines_defs.append(("DejaVuSans", measurements, "left"))
+
+            lines_defs += [
+                ("DejaVuSans", f"Состав: {composition}", "left"),
+                (
+                    "DejaVuSans",
+                    "Импортер: ИП Анисимов Д.В., г. Брест, ул. Московская 247 кв. 68, УНП 291760554",
+                    "left",
+                ),
+                ("DejaVuSans", f"Изготовитель: {manufacturer}", "left"),
+                ("DejaVuSans", "Дата изготовления:______202_г.", "left"),
+                ("DejaVuSans", "Рекомендации по уходу:", "left"),
+                ("DejaVuSans-Bold", f"ЦЕНА: {price} руб", "left"),
+            ]
+
+            final_lines = []
+            for (font, rawtext, align) in lines_defs:
+                sublines = simpleSplit(rawtext, font, self.font_size, self.label_width - 8)
+                for idx_sub, sline in enumerate(sublines):
+                    is_care = ("уход" in rawtext.lower()) and (idx_sub == len(sublines) - 1)
+                    is_price = ("цена:" in rawtext.lower()) and (idx_sub == len(sublines) - 1)
+                    final_lines.append((font, sline, align, is_care, is_price))
+
+            text_lines_count = len(final_lines)
+
+            has_care_img = any(line[3] for line in final_lines) and care_img
+            care_img_height = 4
+            care_img_extra = 2
+
+            has_barcode = any(line[4] for line in final_lines)
+            bc_height = self.barcode_height / mm  # высота штрихкода в мм
+            bc_extra = 2
+
+            physically_used_mm = 0
+            if has_care_img:
+                physically_used_mm += care_img_height + care_img_extra
+            if has_barcode:
+                physically_used_mm += bc_height + bc_extra
+
+            text_space_mm = (self.page_height - self.top_margin - self.bottom_margin) / mm - physically_used_mm
+            if text_space_mm < 5:
+                text_space_mm = 5
+            text_space_pts = text_space_mm * mm
+
+            if text_lines_count > 0:
+                raw_line_height = text_space_pts / text_lines_count
+                if raw_line_height < self.MIN_LINE_HEIGHT:
+                    line_height = self.MIN_LINE_HEIGHT
+                elif raw_line_height > self.MAX_LINE_HEIGHT:
+                    line_height = self.MAX_LINE_HEIGHT
+                else:
+                    line_height = raw_line_height
+            else:
+                line_height = self.MIN_LINE_HEIGHT
+
+            for (font, txt, align, is_care, is_price) in final_lines:
+                font_to_use = font
+                size_to_use = self.font_size
+
+                if is_price:
+                    current_y -= 3 * mm
+                    font_to_use = "DejaVuSans-Bold"
+                    size_to_use = 8
+
+                buffer.setFont(font_to_use, size_to_use)
+
+                if is_care and has_care_img:
+                    # Рисуем заголовок "Рекомендации по уходу" и изображение
+                    if align == "center":
+                        buffer.drawCentredString(center_x, current_y, txt)
+                    else:
+                        buffer.drawString(x + 4, current_y, txt)
+
+                    current_y -= 1 * mm  # небольшой отступ перед картинкой
+
+                    img_height_pt = care_img_height * mm
+                    current_y -= img_height_pt
+                    buffer.drawImage(
+                        care_img, x + 4, current_y, width=(self.label_width - 8), height=img_height_pt
+                    )
+                else:
+                    if align == "center":
+                        buffer.drawCentredString(center_x, current_y, txt)
+                    else:
+                        buffer.drawString(x + 4, current_y, txt)
+
+                    current_y -= line_height
+
+                if is_price and has_barcode:
+                    barcode_height_mm = self.barcode_height / mm
+                    left_right_padding_mm = 2
+
+                    usable_width_mm = (self.label_width / mm) - 2 * left_right_padding_mm
+
+                    bc = createBarcodeDrawing(
+                        "Code128",
+                        value=sku,
+                        barHeight=barcode_height_mm * mm,
+                        barWidth=1.2,
+                        humanReadable=False,
+                    )
+
+                    bc_width = bc.width
+                    scale_factor = (usable_width_mm * mm) / bc_width
+
+                    bc_x = x + left_right_padding_mm * mm + (
+                        (usable_width_mm * mm) - (bc_width * scale_factor)
+                    ) / 2
+                    bc_y = current_y - barcode_height_mm * mm
+
+                    buffer.saveState()
+                    buffer.translate(bc_x, bc_y)
+                    buffer.scale(scale_factor, 1.0)
+                    renderPDF.draw(bc, buffer, 0, 0)
+                    buffer.restoreState()
+
+        if len(products_list) % self.labels_per_page != 0:
             buffer.showPage()
 
-        center_x = x + label_width / 2
-        current_y = page_height - top_margin
+        buffer.save()
+        print(f"Сгенерировано: {self.output_file}")
 
-        sku = product['meta'].get('_sku', 'N/A')
-        price = product['meta'].get('_price') or product['meta'].get('_regular_price') or product['meta'].get('_sale_price') or '0.00'
-        base_title = product.get('base_title', product['title'])
-        description = product.get('content', '')
+    def generate_labels_entry(self, skus: list[str], db_config: dict) -> None:
+        """\
+        Точка входа для генерации этикеток по списку SKU.
 
-        size_val = ""
-        for key in ["attribute_pa_razmer", "attribute_pa_size", "attribute_pa_rost"]:
-            if key in product['meta'] and product['meta'][key]:
-                size_val = product['meta'][key]
-                break
-        if not size_val:
-            size_val = extract_age_as_size(description)
+        Параметры
+        ----------
+        skus : list[str]
+            Список артикулов, для которых нужно напечатать этикетки.
+        db_config : dict
+            Параметры подключения к базе данных.
+        """
+        # Загружаем данные товаров из базы
+        products = get_products_by_skus(skus, db_config)
 
-        art_and_size = f"Арт: {sku}"
+        # Расширяем список товаров с учётом количества
+        expanded_products: list[dict] = []
+        for product in products.values():
+            qty = get_product_quantity(product, self.use_stock_quantity)
+            expanded_products.extend([product] * qty)
 
-        def is_size_value(value):
-            # Если содержит буквы — это размер
-            if re.search(r"[A-Za-zА-Яа-я]", value):
-                return True
-            # Если диапазон типа "9-10" или "8–9" — тоже размер
-            if re.match(r"\d+\s*[\-–]\s*\d+", value):
-                return True
-            # Если просто число и меньше 56 — размер
-            try:
-                return int(value) < 56
-            except ValueError:
-                return False
-
-        size_attr_keys = ["attribute_pa_razmer", "attribute_pa_size", "attribute_pa_rost"]
-        if size_val:
-            label = "Размер" if is_size_value(size_val) else "Рост"
-            art_and_size += f" {label}: {size_val}"
-            
-        other_attributes = extract_other_attributes(product['meta'], exclude_keys=size_attr_keys, slug_to_label=slug_to_label)
-        if other_attributes:
-            art_and_size += f", {other_attributes}"
-
-        composition = extract_composition(description) or "____________________"
-        manufacturer = extract_manufacturer(description) or "____________________\n____________________\n____________________"
-        measurements = extract_measurements(description, size_val)
-
-        lines_defs = [
-            ("DejaVuSans-Bold", f"EAC {base_title}", "center"),
-            ("DejaVuSans-Bold", art_and_size, "left"),
-        ]
-        
-        if measurements:
-            lines_defs.append(("DejaVuSans", measurements, "left"))
-
-        lines_defs += [
-            ("DejaVuSans", f"Состав: {composition}", "left"),
-            ("DejaVuSans", "Импортер: ИП Анисимов Д.В., г. Брест, ул. Московская 247 кв. 68, УНП 291760554", "left"),
-            ("DejaVuSans", f"Изготовитель: {manufacturer}", "left"),
-            ("DejaVuSans", "Дата изготовления:______202_г.", "left"),
-            ("DejaVuSans", "Рекомендации по уходу:", "left"),
-            ("DejaVuSans-Bold", f"ЦЕНА: {price} руб", "left"),
-        ]
-
-        final_lines = []
-        for (font, rawtext, align) in lines_defs:
-            sublines = simpleSplit(rawtext, font, font_size, label_width - 8)
-            for idx_sub, sline in enumerate(sublines):
-                is_care = ("уход" in rawtext.lower()) and (idx_sub == len(sublines)-1)
-                is_price = ("цена:" in rawtext.lower()) and (idx_sub == len(sublines)-1)
-                final_lines.append((font, sline, align, is_care, is_price))
-
-        text_lines_count = len(final_lines)
-
-        has_care_img = any(line[3] for line in final_lines) and care_img
-        care_img_height = 4
-        care_img_extra = 2
-
-        has_barcode = any(line[4] for line in final_lines)
-        bc_height = barcode_height / mm  # высота штрихкода в мм
-        bc_extra = 2
-
-        physically_used_mm = 0
-        if has_care_img:
-            physically_used_mm += (care_img_height + care_img_extra)
-        if has_barcode:
-            physically_used_mm += (bc_height + bc_extra)
-
-        text_space_mm = (page_height - top_margin - bottom_margin) / mm - physically_used_mm
-        if text_space_mm < 5:
-            text_space_mm = 5
-        text_space_pts = text_space_mm * mm
-
-        if text_lines_count > 0:
-            raw_line_height = text_space_pts / text_lines_count
-            if raw_line_height < MIN_LINE_HEIGHT:
-                line_height = MIN_LINE_HEIGHT
-            elif raw_line_height > MAX_LINE_HEIGHT:
-                line_height = MAX_LINE_HEIGHT
-            else:
-                line_height = raw_line_height
-        else:
-            line_height = MIN_LINE_HEIGHT
-
-        for (font, txt, align, is_care, is_price) in final_lines:
-            font_to_use = font
-            size_to_use = font_size
-
-            if is_price:
-                current_y -= 3 * mm
-                font_to_use = "DejaVuSans-Bold"
-                size_to_use = 8
-
-            buffer.setFont(font_to_use, size_to_use)
-            
-            if is_care and has_care_img:
-                # Сначала рисуем текст строки "Рекомендации по уходу:"
-                if align == "center":
-                    buffer.drawCentredString(center_x, current_y, txt)
-                else:
-                    buffer.drawString(x + 4, current_y, txt)
-
-                # Отступ сверху перед изображением (1 мм)
-                current_y -= 1 * mm
-
-                img_height_pt = care_img_height * mm
-                current_y -= img_height_pt
-                buffer.drawImage(care_img, x + 4, current_y, width=(label_width - 8), height=img_height_pt)
-
-            else:
-                # Обычное поведение
-                buffer.setFont(font_to_use, size_to_use)
-                if align == "center":
-                    buffer.drawCentredString(center_x, current_y, txt)
-                else:
-                    buffer.drawString(x + 4, current_y, txt)
-
-                current_y -= line_height
-
-
-            if is_price and has_barcode:
-
-                barcode_height_mm = barcode_height / mm
-                left_right_padding_mm = 2  # отступы 2 мм слева и справа
-                
-                usable_width_mm = (label_width / mm) - 2 * left_right_padding_mm
-
-                bc = createBarcodeDrawing(
-                    'Code128',
-                    value=sku,
-                    barHeight=barcode_height_mm * mm,
-                    barWidth=1.2,
-                    humanReadable=False
-                )
-
-                # Получаем фактическую ширину штрихкода
-                bc_width = bc.width
-                scale_factor = (usable_width_mm * mm) / bc_width  # во сколько раз сжать
-
-                # Центрирование штрихкода по X с учётом масштаба
-                bc_x = x + left_right_padding_mm * mm + ((usable_width_mm * mm) - (bc_width * scale_factor)) / 2
-                bc_y = current_y - barcode_height_mm * mm
-
-                # Масштабируем и рисуем
-                buffer.saveState()
-                buffer.translate(bc_x, bc_y)
-                buffer.scale(scale_factor, 1.0)
-                renderPDF.draw(bc, buffer, 0, 0)
-                buffer.restoreState()
-                
-    if len(products_list) % labels_per_page != 0:
-        buffer.showPage()
-
-    buffer.save()
-    print(f"Сгенерировано: {output_file}")
+        mapping = {i: p for i, p in enumerate(expanded_products)}
+        self.generate_labels(mapping, db_config)
 
 
 def generate_labels_entry(skus, settings, db_config):
-    """Entry point for label generation.
+    """Высокоуровневая функция для совместимости с существующим кодом."""
+    generator = LabelGenerator(settings)
+    generator.generate_labels_entry(skus, db_config)
 
-    Parameters
-    ----------
-    skus : list[str]
-        List of product SKUs to print labels for.
-    settings : dict
-        Rendering options loaded from ``settings.json``. Must contain all label
-        dimensions and may optionally specify ``care_image_path`` pointing to the
-        washing instruction image.
-    db_config : dict
-        Database connection parameters.
-    settings must contain ``labels_per_page`` defining how many labels
-    are placed on one page. ``use_stock_quantity`` controls whether the
-    product stock value determines label count.
-    """
-    global page_width, page_height, label_width, font_size
-    global min_line_height, barcode_height, bottom_margin, top_margin
-    global MIN_LINE_HEIGHT, MAX_LINE_HEIGHT, CARE_IMAGE_PATH, output_file
-    global labels_per_page
-
-    page_width = settings.get("page_width_mm", 120) * mm
-    page_height = settings.get("page_height_mm", 70) * mm
-    label_width = settings.get("label_width_mm", 40) * mm
-    font_size = settings.get("font_size", 6)
-    min_line_height = settings.get("min_line_height_mm", 2.0) * mm
-    barcode_height = settings.get("barcode_height_mm", 6) * mm
-    bottom_margin = settings.get("bottom_margin_mm", 0) * mm
-    top_margin = settings.get("top_margin_mm", 2) * mm
-    output_file = settings.get("output_file", "labels.pdf")
-    CARE_IMAGE_PATH = settings.get("care_image_path", "care.png")
-    labels_per_page = settings.get("labels_per_page", 3)
-    use_stock_quantity = settings.get("use_stock_quantity", True)
-    MIN_LINE_HEIGHT = min_line_height
-    MAX_LINE_HEIGHT = 4.0 * mm
-
-    products = get_products_by_skus(skus, db_config)
-
-    expanded_products = []
-    for product in products.values():
-        qty = get_product_quantity(product, use_stock_quantity)
-        expanded_products.extend([product] * qty)
-
-    generate_labels({i: p for i, p in enumerate(expanded_products)}, db_config, labels_per_page)
