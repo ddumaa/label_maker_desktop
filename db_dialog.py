@@ -1,21 +1,30 @@
 from PyQt5 import QtWidgets
 
+
 class DBConfigDialog(QtWidgets.QDialog):
     """Dialog used for configuring MySQL connection parameters."""
 
     def __init__(self, parent=None, current_config=None):
+        """Initialize dialog widgets with current configuration."""
         super().__init__(parent)
+        # When configuration is absent we work with defaults
+        if current_config is None:
+            current_config = {}
         self.setWindowTitle("Настройки подключения к БД")
         self.setModal(True)
 
         layout = QtWidgets.QFormLayout()
 
-        self.host_input = QtWidgets.QLineEdit(current_config.get("host", "localhost"))
+        self.host_input = QtWidgets.QLineEdit(
+            current_config.get("host", "localhost")
+        )
         self.port_input = QtWidgets.QSpinBox()
         self.port_input.setMaximum(99999)
         self.port_input.setValue(current_config.get("port", 3306))
         self.user_input = QtWidgets.QLineEdit(current_config.get("user", ""))
-        self.pass_input = QtWidgets.QLineEdit(current_config.get("password", ""))
+        self.pass_input = QtWidgets.QLineEdit(
+            current_config.get("password", "")
+        )
         self.pass_input.setEchoMode(QtWidgets.QLineEdit.Password)
         self.db_input = QtWidgets.QLineEdit(current_config.get("database", ""))
 
@@ -25,7 +34,9 @@ class DBConfigDialog(QtWidgets.QDialog):
         layout.addRow("Пароль:", self.pass_input)
         layout.addRow("База данных:", self.db_input)
 
-        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Save | QtWidgets.QDialogButtonBox.Cancel)
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Save | QtWidgets.QDialogButtonBox.Cancel
+        )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addRow(buttons)
@@ -33,6 +44,7 @@ class DBConfigDialog(QtWidgets.QDialog):
         self.setLayout(layout)
 
     def get_config(self):
+        """Return entered database configuration as a dictionary."""
         return {
             "host": self.host_input.text(),
             "port": self.port_input.value(),
