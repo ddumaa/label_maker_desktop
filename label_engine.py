@@ -44,8 +44,16 @@ DEFAULT_TOP_MARGIN_MM = 2
 DEFAULT_LABELS_PER_PAGE = 3
 
 # === РЕГИСТРАЦИЯ ШРИФТОВ ===
-pdfmetrics.registerFont(TTFont("DejaVuSans", "fonts/DejaVuSans.ttf"))
-pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", "fonts/DejaVuSans-Bold.ttf"))
+# Полные пути к файлам шрифтов. Используем абсолютные пути, чтобы модуль
+# работал корректно вне зависимости от текущей рабочей директории.
+BASE_DIR = Path(__file__).resolve().parent
+FONT_DIR = BASE_DIR / "fonts"
+
+REGULAR_FONT_PATH = FONT_DIR / "DejaVuSans.ttf"
+BOLD_FONT_PATH = FONT_DIR / "DejaVuSans-Bold.ttf"
+
+pdfmetrics.registerFont(TTFont("DejaVuSans", str(REGULAR_FONT_PATH)))
+pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", str(BOLD_FONT_PATH)))
 
 # === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
 def extract_composition(text):
