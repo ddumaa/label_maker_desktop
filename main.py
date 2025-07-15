@@ -8,7 +8,13 @@ from logging_setup import configure_logging
 
 configure_logging()
 
-import mysql.connector
+try:
+    import mysql.connector
+    MYSQL_AVAILABLE = True
+except ModuleNotFoundError as exc:  # Коннектор MySQL не установлен
+    mysql = None  # type: ignore
+    MYSQL_AVAILABLE = False
+    MYSQL_IMPORT_ERROR = exc
 from config_loader import load_settings, load_db_config
 
 from preview_engine import generate_preview_pdf, convert_pdf_to_image
@@ -60,11 +66,13 @@ class LabelMakerApp(QtWidgets.QMainWindow):
             )
             self.db_config = {}
             self._db_loaded = False
-        except mysql.connector.Error as exc:
+        except Exception as exc:
+            # mysql.connector.Error может быть недоступен при отсутствии
+            # зависимости, поэтому перехватываем общее исключение.
             QtWidgets.QMessageBox.critical(
                 self,
                 "Ошибка",
-                f"Ошибка MySQL при загрузке конфигурации:\n{exc}"
+                f"Ошибка при загрузке конфигурации БД:\n{exc}"
             )
             self.db_config = {}
             self._db_loaded = False
@@ -331,6 +339,20 @@ class LabelMakerApp(QtWidgets.QMainWindow):
 def run_gui():
     """Entry point to launch the graphical interface."""
     app = QtWidgets.QApplication(sys.argv)
+
+    if not MYSQL_AVAILABLE:
+        # Показываем пользователю инструкцию по установке отсутствующей зависимости
+        QtWidgets.QMessageBox.critical(
+            None,
+            "Отсутствует зависимость",
+            (
+                "Модуль 'mysql-connector-python' не установлен.\n"
+                "Установите его командой:\n"
+                "    pip install mysql-connector-python"
+            ),
+        )
+        sys.exit(1)
+
     window = LabelMakerApp()
     window.show()
     sys.exit(app.exec_())
