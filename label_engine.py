@@ -15,6 +15,7 @@ import json
 from reportlab.graphics.shapes import Drawing
 from reportlab.graphics.barcode import createBarcodeDrawing
 from reportlab.graphics import renderPDF
+from pathlib import Path
 
 # === НАСТРОЙКИ ===
 
@@ -26,7 +27,9 @@ def load_skus_from_file(filepath):
         return [line.strip() for line in f if line.strip()]
 
 output_file = "labels.pdf"
-CARE_IMAGE_URL = "https://mouni.by/tools/labels/%D0%A3%D1%85%D0%BE%D0%B4%20%D0%BE%D0%B1%D1%80%D0%B5%D0%B7%D0%B0%D0%BD%D0%BD%D1%8B%D0%B9.png"
+# Default path for the care image used on labels. Users can override this in
+# ``settings.json`` or via the settings dialog.
+CARE_IMAGE_PATH = "care.png"
 
 # === PDF НАСТРОЙКИ ===
 page_width, page_height = 120 * mm, 70 * mm
@@ -106,6 +109,22 @@ def write_measurement_log(log_lines):
 def extract_age_as_size(text):
     match = re.search(r"Возраст:?\s*([\d\-–\s]+лет?)", text, re.IGNORECASE)
     return match.group(1).strip() if match else None
+
+def load_care_image(path_or_url):
+    """Return :class:`ImageReader` from local file or URL if possible."""
+    if not path_or_url:
+        return None
+    try:
+        file_path = Path(path_or_url)
+        if file_path.exists():
+            img = Image.open(file_path).convert("RGB")
+        else:
+            response = requests.get(path_or_url, timeout=5)
+            response.raise_for_status()
+            img = Image.open(io.BytesIO(response.content)).convert("RGB")
+        return ImageReader(img)
+    except Exception:
+        return None
     
 def extract_other_attributes(meta, exclude_keys, slug_to_label):
     attributes = []
@@ -199,13 +218,9 @@ def generate_labels(products):
     """Render PDF labels for provided products."""
     buffer = canvas.Canvas(output_file, pagesize=(page_width, page_height))
 
-    # Пытаемся один раз загрузить картинку ухода
-    try:
-        img_data = requests.get(CARE_IMAGE_URL).content
-        img_rgb = Image.open(io.BytesIO(img_data)).convert("RGB")
-        care_img = ImageReader(img_rgb)
-    except:
-        care_img = None
+    # One-time attempt to load care instructions image either from a local path
+    # or an HTTP URL. Failures are silently ignored.
+    care_img = load_care_image(CARE_IMAGE_PATH)
 
     # Ограничения на высоту строки
     MIN_LINE_HEIGHT = 2.0 * mm
@@ -412,19 +427,21 @@ def generate_labels_entry(skus, settings, db_config):
     skus : list[str]
         List of product SKUs to print labels for.
     settings : dict
-        Rendering options loaded from ``settings.json``.
+        Rendering options loaded from ``settings.json``. Must contain all label
+        dimensions and may optionally specify ``care_image_path`` pointing to the
+        washing instruction image.
     db_config : dict
         Database connection parameters.
     """
     global page_width, page_height, label_width, font_size
-    global MIN_LINE_HEIGHT, MAX_LINE_HEIGHT, CARE_IMAGE_URL, output_file
+    global MIN_LINE_HEIGHT, MAX_LINE_HEIGHT, CARE_IMAGE_PATH, output_file
 
     page_width = settings.get("page_width_mm", 120) * mm
     page_height = settings.get("page_height_mm", 70) * mm
     label_width = settings.get("label_width_mm", 40) * mm
     font_size = settings.get("font_size", 6)
     output_file = settings.get("output_file", "labels.pdf")
-    CARE_IMAGE_URL = settings.get("care_image_url", "https://mouni.by/tools/labels/%D0%A3%D1%85%D0%BE%D0%B4%20%D0%BE%D0%B1%D1%80%D0%B5%D0%B7%D0%B0%D0%BD%D0%BD%D1%8B%D0%B9.png")
+    CARE_IMAGE_PATH = settings.get("care_image_path", "care.png")
     MIN_LINE_HEIGHT = 2.0 * mm
     MAX_LINE_HEIGHT = 4.0 * mm
 

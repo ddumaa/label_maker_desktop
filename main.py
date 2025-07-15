@@ -12,6 +12,8 @@ from db_dialog import DBConfigDialog
 from label_settings import LabelSettingsDialog
 
 class LabelMakerApp(QtWidgets.QMainWindow):
+    """Main application window for the label maker GUI."""
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Label Maker")
@@ -42,6 +44,10 @@ class LabelMakerApp(QtWidgets.QMainWindow):
         self.db_settings_btn = QtWidgets.QPushButton("⚙ Настройки БД")
         self.db_settings_btn.clicked.connect(self.show_db_config_dialog)
         left_layout.addWidget(self.db_settings_btn)
+
+        self.label_settings_btn = QtWidgets.QPushButton("🏷️ Настройки этикетки")
+        self.label_settings_btn.clicked.connect(self.show_label_settings_dialog)
+        left_layout.addWidget(self.label_settings_btn)
 
         self.generate_button = QtWidgets.QPushButton("📤 Сгенерировать PDF")
         self.generate_button.clicked.connect(self.generate_pdf)
@@ -152,6 +158,7 @@ class LabelMakerApp(QtWidgets.QMainWindow):
 
 
 def run_gui():
+    """Entry point to launch the graphical interface."""
     app = QtWidgets.QApplication(sys.argv)
     window = LabelMakerApp()
     window.show()
