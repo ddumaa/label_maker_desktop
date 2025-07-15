@@ -6,18 +6,22 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.utils import simpleSplit
 from reportlab.lib.utils import ImageReader
 from PIL import Image
-import os, re, io, requests, mysql.connector, json
+import os
+import re
+import io
+import requests
+import mysql.connector
+import json
 from reportlab.graphics.shapes import Drawing
 from reportlab.graphics.barcode import createBarcodeDrawing
 from reportlab.graphics import renderPDF
 
 # === НАСТРОЙКИ ===
-config_path = os.path.join(os.path.dirname(__file__), "db_config.json")
 
-with open(config_path, "r", encoding="utf-8") as f:
-    db_config = json.load(f)
+# Connection configuration will be supplied at runtime.
 
 def load_skus_from_file(filepath):
+    """Return SKU list from text file."""
     with open(filepath, "r", encoding="utf-8") as f:
         return [line.strip() for line in f if line.strip()]
 
@@ -123,7 +127,8 @@ def extract_other_attributes(meta, exclude_keys, slug_to_label):
 
     return ", ".join(attributes) if attributes else None
     
-def get_term_labels(term_slugs):
+def get_term_labels(term_slugs, db_config):
+    """Return mapping slug -> human label."""
     if not term_slugs:
         return {}
 
@@ -141,7 +146,8 @@ def get_term_labels(term_slugs):
     return result
 
 # === ПОДКЛЮЧЕНИЕ К БД ===
-def get_products_by_skus(skus):
+def get_products_by_skus(skus, db_config):
+    """Fetch product data for the given SKUs."""
     conn = mysql.connector.connect(**db_config)
     cursor = conn.cursor(dictionary=True)
 
@@ -190,6 +196,7 @@ def get_products_by_skus(skus):
 
 # === ГЕНЕРАЦИЯ PDF ===
 def generate_labels(products):
+    """Render PDF labels for provided products."""
     buffer = canvas.Canvas(output_file, pagesize=(page_width, page_height))
 
     # Пытаемся один раз загрузить картинку ухода
@@ -214,7 +221,7 @@ def generate_labels(products):
             if key.startswith("attribute_") and value.strip():
                 all_slugs.add(value.strip())
                 
-    slug_to_label = get_term_labels(all_slugs)
+    slug_to_label = get_term_labels(all_slugs, db_config)
 
     for idx, product in enumerate(products_list):
         pos_in_page = idx % 3
@@ -398,6 +405,17 @@ def generate_labels(products):
 
 
 def generate_labels_entry(skus, settings, db_config):
+    """Entry point for label generation.
+
+    Parameters
+    ----------
+    skus : list[str]
+        List of product SKUs to print labels for.
+    settings : dict
+        Rendering options loaded from ``settings.json``.
+    db_config : dict
+        Database connection parameters.
+    """
     global page_width, page_height, label_width, font_size
     global MIN_LINE_HEIGHT, MAX_LINE_HEIGHT, CARE_IMAGE_URL, output_file
 
