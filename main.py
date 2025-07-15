@@ -17,12 +17,22 @@ class LabelMakerApp(QtWidgets.QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Label Maker")
-        self.setGeometry(100, 100, 1000, 600)
+        # Минимальная инициализация: загружаем конфигурацию и строим интерфейс
+        self.settings: dict = {}
+        self.db_config: dict = {}
+        self._db_loaded = False
 
-        # Load application configuration with error handling
-        # Загрузка настроек и параметров БД может завершиться ошибкой,
-        # поэтому оборачиваем вызовы в try/except и отображаем диалог с ошибкой.
+        self._load_config()
+        self._build_ui()
+        if self._db_loaded:
+            self.update_db_status()
+
+        # Последующая инициализация выполняется в отдельных методах
+
+    def _load_config(self) -> None:
+        """Загружает настройки приложения и параметры подключения к БД."""
+
+        # Загружаем настройки генерации этикеток
         try:
             self.settings = load_settings()
         except FileNotFoundError as exc:
@@ -31,11 +41,10 @@ class LabelMakerApp(QtWidgets.QMainWindow):
                 "Ошибка",
                 f"Не найден файл настроек:\n{exc}"
             )
-            # При ошибке продолжаем работу с пустыми настройками
+            # При ошибке применяем настройки по умолчанию
             self.settings = {}
 
-        # Флаг, успешно ли загружена конфигурация БД
-        db_loaded = True
+        self._db_loaded = True
         try:
             self.db_config = load_db_config()
         except FileNotFoundError as exc:
@@ -45,7 +54,7 @@ class LabelMakerApp(QtWidgets.QMainWindow):
                 f"Не найден файл конфигурации БД:\n{exc}"
             )
             self.db_config = {}
-            db_loaded = False
+            self._db_loaded = False
         except mysql.connector.Error as exc:
             QtWidgets.QMessageBox.critical(
                 self,
@@ -53,30 +62,34 @@ class LabelMakerApp(QtWidgets.QMainWindow):
                 f"Ошибка MySQL при загрузке конфигурации:\n{exc}"
             )
             self.db_config = {}
-            db_loaded = False
+            self._db_loaded = False
 
-        # UI
+    def _build_ui(self) -> None:
+        """Создаёт элементы интерфейса и привязывает обработчики событий."""
+
+        self.setWindowTitle("Label Maker")
+        self.setGeometry(100, 100, 1000, 600)
+
+        # Главные контейнеры
         main_layout = QtWidgets.QHBoxLayout()
         left_layout = QtWidgets.QVBoxLayout()
         right_layout = QtWidgets.QVBoxLayout()
 
+        # Список SKU
         self.sku_list = QtWidgets.QListWidget()
         self.sku_list.itemClicked.connect(self.preview_selected_sku)
         left_layout.addWidget(QtWidgets.QLabel("📦 Артикулы"))
         left_layout.addWidget(self.sku_list)
-        
+
+        # Статус БД и кнопка проверки
         self.db_status_label = QtWidgets.QLabel()
         self.test_conn_button = QtWidgets.QPushButton("Тест подключения")
         self.test_conn_button.clicked.connect(self.test_db_connection)
 
-        # Группа для отображения текущего состояния БД и запуска проверки
         db_status_layout = QtWidgets.QHBoxLayout()
         db_status_layout.addWidget(self.db_status_label)
         db_status_layout.addWidget(self.test_conn_button)
         left_layout.addLayout(db_status_layout)
-        # Проверяем подключение к БД только если конфигурация загружена
-        if db_loaded:
-            self.update_db_status()
 
         self.load_button = QtWidgets.QPushButton("📁 Загрузить SKU")
         self.load_button.clicked.connect(self.load_sku_file)
@@ -104,6 +117,7 @@ class LabelMakerApp(QtWidgets.QMainWindow):
         left_layout.addWidget(QtWidgets.QLabel("📝 Лог"))
         left_layout.addWidget(self.log_output)
 
+        # Область превью
         self.image_label = QtWidgets.QLabel("Превью")
         self.image_label.setAlignment(QtCore.Qt.AlignCenter)
         self.image_label.setStyleSheet("background-color: #f0f0f0; border: 1px solid #ccc;")
