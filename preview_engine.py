@@ -21,9 +21,13 @@ def render_preview(skus, settings, db_config, single=True):
         images[0].save(img_path, "PNG")
         return img_path  # Временный путь
 
-def generate_preview_pdf(pdf_path, sku, settings, db_config, generator_func=generate_labels_entry):
-    """Generate a one-label PDF and store it at ``pdf_path``."""
-    generator_func([sku], settings, db_config)
+def generate_preview_pdf(pdf_path, skus, settings, db_config, generator_func=generate_labels_entry):
+    """Generate a PDF preview for the provided SKUs."""
+    if isinstance(skus, str):
+        sku_list = [skus]
+    else:
+        sku_list = list(skus)
+    generator_func(sku_list, settings, db_config)
     # Переименовываем файл, если необходимо
     output_file = settings.get("output_file", "labels.pdf")
     if os.path.exists(output_file):
