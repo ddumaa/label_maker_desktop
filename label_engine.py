@@ -32,6 +32,8 @@ output_file = "labels.pdf"
 CARE_IMAGE_PATH = "care.png"
 
 # === PDF НАСТРОЙКИ ===
+# Значения по умолчанию для размеров и отступов. Все параметры могут
+# быть переопределены через ``settings.json``. Единицы измерения - миллиметры.
 page_width, page_height = 120 * mm, 70 * mm
 label_width = 40 * mm
 font_size = 6
@@ -321,7 +323,7 @@ def generate_labels(products):
         care_img_extra = 2
 
         has_barcode = any(line[4] for line in final_lines)
-        bc_height = 6
+        bc_height = barcode_height / mm  # высота штрихкода в мм
         bc_extra = 2
 
         physically_used_mm = 0
@@ -383,8 +385,8 @@ def generate_labels(products):
 
 
             if is_price and has_barcode:
-            
-                barcode_height_mm = 14
+
+                barcode_height_mm = barcode_height / mm
                 left_right_padding_mm = 2  # отступы 2 мм слева и справа
                 
                 usable_width_mm = (label_width / mm) - 2 * left_right_padding_mm
@@ -434,15 +436,20 @@ def generate_labels_entry(skus, settings, db_config):
         Database connection parameters.
     """
     global page_width, page_height, label_width, font_size
+    global min_line_height, barcode_height, bottom_margin, top_margin
     global MIN_LINE_HEIGHT, MAX_LINE_HEIGHT, CARE_IMAGE_PATH, output_file
 
     page_width = settings.get("page_width_mm", 120) * mm
     page_height = settings.get("page_height_mm", 70) * mm
     label_width = settings.get("label_width_mm", 40) * mm
     font_size = settings.get("font_size", 6)
+    min_line_height = settings.get("min_line_height_mm", 2.0) * mm
+    barcode_height = settings.get("barcode_height_mm", 6) * mm
+    bottom_margin = settings.get("bottom_margin_mm", 0) * mm
+    top_margin = settings.get("top_margin_mm", 2) * mm
     output_file = settings.get("output_file", "labels.pdf")
     CARE_IMAGE_PATH = settings.get("care_image_path", "care.png")
-    MIN_LINE_HEIGHT = 2.0 * mm
+    MIN_LINE_HEIGHT = min_line_height
     MAX_LINE_HEIGHT = 4.0 * mm
 
     products = get_products_by_skus(skus, db_config)

@@ -3,6 +3,10 @@
   "page_height_mm": 70,
   "label_width_mm": 40,
   "font_size": 6,
+  "min_line_height_mm": 2.0,
+  "barcode_height_mm": 6,
+  "bottom_margin_mm": 0,
+  "top_margin_mm": 2,
   "output_file": "labels.pdf",
   "care_image_path": "care.png"
 }
