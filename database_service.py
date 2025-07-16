@@ -4,7 +4,9 @@ DatabaseService module responsible for communication with MySQL.
 
 from __future__ import annotations
 
-from typing import Iterable, Dict
+from typing import Iterable, Dict, Optional
+from contextlib import contextmanager
+import time
 import logging
 
 logger = logging.getLogger(__name__)
@@ -30,10 +32,18 @@ class DatabaseService:
     """
 
     def __init__(self, db_config: Dict):
-        """Сохраняет параметры подключения к базе данных.
+        """Сохраняет параметры подключения к базе данных и настраивает режим работы.
 
-        При инициализации конфигурация выводится в лог с маскированием
-        пароля, чтобы избежать утечки чувствительных данных.
+        Помимо стандартных параметров подключения допускаются специальные ключи:
+
+        ``persistent``
+            Использовать постоянное соединение вместо открытия нового при каждом запросе.
+
+        ``pool_size``
+            Размер пула соединений. При значении больше нуля используется пул.
+
+        ``max_retries``
+            Количество попыток подключения при возникновении временной ошибки.
 
         Raises
         ------
@@ -41,7 +51,20 @@ class DatabaseService:
             Если библиотека ``mysql-connector-python`` не установлена.
         """
         self._ensure_connector()
-        self._db_config = db_config
+
+        # Параметры управления соединениями не передаются напрямую в коннектор
+        internal_keys = {"pool_size", "persistent", "max_retries"}
+        self._db_config = {k: v for k, v in db_config.items() if k not in internal_keys}
+
+        self._persistent: bool = bool(db_config.get("persistent", False))
+        self._max_retries: int = int(db_config.get("max_retries", 1))
+
+        pool_size = db_config.get("pool_size")
+        self._pool: Optional[mysql.connector.pooling.MySQLConnectionPool] = None
+        if pool_size:
+            self._create_pool(int(pool_size))
+
+        self._connection: Optional[mysql.connector.MySQLConnection] = None
 
         # Для логирования конфигурации не выводим пароль.
         safe_config = self._mask_password(db_config)
@@ -68,27 +91,71 @@ class DatabaseService:
                 "Библиотека 'mysql-connector-python' не установлена"
             ) from _IMPORT_ERROR
 
-    def _connect(self):
-        """Create a MySQL connection using stored configuration.
-
-        Оборачивает ``mysql.connector.connect`` и превращает ошибки
-        подключения в :class:`DatabaseConnectionError`.
-
-        Raises
-        ------
-        DatabaseConnectionError
-            Если не удаётся подключиться к БД.
-        """
-        self._ensure_connector()
+    def _create_pool(self, size: int) -> None:
+        """Создаёт пул соединений указанного размера."""
         try:
-            logger.debug("Opening MySQL connection")
-            conn = mysql.connector.connect(**self._db_config)
-            logger.debug("MySQL connection established")
-            return conn
+            self._pool = mysql.connector.pooling.MySQLConnectionPool(
+                pool_size=size, **self._db_config
+            )
+            logger.debug("MySQL connection pool created with size %s", size)
         except mysql.connector.Error as exc:
             raise DatabaseConnectionError(
-                f"Не удалось подключиться к базе данных: {exc}"
+                f"Не удалось создать пул соединений: {exc}"
             ) from exc
+
+    def _is_transient_error(self, exc: Exception) -> bool:
+        """Определяет, относится ли ошибка подключения к временным."""
+        errno = getattr(exc, "errno", None)
+        transient_codes = {
+            mysql.connector.errorcode.CR_SERVER_GONE_ERROR,
+            mysql.connector.errorcode.CR_SERVER_LOST,
+            mysql.connector.errorcode.CR_CONNECTION_ERROR,
+            mysql.connector.errorcode.CR_CONN_HOST_ERROR,
+        }
+        return errno in transient_codes
+
+    def _acquire_connection(self):
+        """Получить соединение из пула, постоянное или новое."""
+        if self._pool is not None:
+            return self._pool.get_connection()
+        if self._persistent:
+            if self._connection is None or not self._connection.is_connected():
+                self._connection = mysql.connector.connect(**self._db_config)
+            return self._connection
+        return mysql.connector.connect(**self._db_config)
+
+    def _release_connection(self, conn) -> None:
+        """Закрыть или вернуть соединение в пул."""
+        if self._pool is not None:
+            conn.close()
+        elif not self._persistent:
+            conn.close()
+
+    def _get_connection_with_retry(self):
+        """Подключение с учётом настроек повторов при ошибках."""
+        attempts = max(1, self._max_retries)
+        for attempt in range(1, attempts + 1):
+            try:
+                logger.debug("Opening MySQL connection (attempt %s)", attempt)
+                return self._acquire_connection()
+            except mysql.connector.Error as exc:
+                if attempt < attempts and self._is_transient_error(exc):
+                    logger.warning("Transient DB error: %s", exc)
+                    time.sleep(1)
+                    continue
+                raise DatabaseConnectionError(
+                    f"Не удалось подключиться к базе данных: {exc}"
+                ) from exc
+
+    @contextmanager
+    def _connect(self):
+        """Контекстный менеджер получения соединения с учётом пула и повторов."""
+        self._ensure_connector()
+        conn = self._get_connection_with_retry()
+        try:
+            yield conn
+        finally:
+            self._release_connection(conn)
 
     def check_connection(self) -> None:
         """Проверить корректность параметров подключения."""
