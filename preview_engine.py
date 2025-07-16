@@ -43,6 +43,12 @@ def generate_preview_pdf(pdf_path, skus, settings, db_config, generator_func=gen
     generator_func : Callable
         Function used to generate labels. Defaults to
         :func:`generate_labels_entry`.
+
+    Raises
+    ------
+    DatabaseConnectionError
+        Возникает, если не удаётся подключиться к БД при генерации
+        превью. Исключение повторно пробрасывается после логирования.
     """
 
     if isinstance(skus, str):
@@ -59,6 +65,7 @@ def generate_preview_pdf(pdf_path, skus, settings, db_config, generator_func=gen
     except DatabaseConnectionError as exc:
         # Выводим ошибку подключения к базе данных при формировании превью.
         logger.error("[DB ERROR] %s", exc)
+        raise
     finally:
         # Restore the original output_file setting if it existed.
         if original_output is not None:

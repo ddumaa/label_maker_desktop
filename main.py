@@ -210,7 +210,10 @@ class LabelMakerApp(QtWidgets.QMainWindow):
                 pixmap = QtGui.QPixmap.fromImage(image_qt)
                 self.image_label.setPixmap(pixmap.scaled(self.image_label.size(), QtCore.Qt.KeepAspectRatio))
         except DatabaseConnectionError as exc:
+            # Пользователь получает всплывающее сообщение при проблеме
+            # с подключением к БД, также фиксируем её в логе.
             QtWidgets.QMessageBox.critical(self, "Ошибка БД", str(exc))
+            self.log_output.append(f"❌ Ошибка БД: {exc}")
         except Exception as e:
             self.log_output.append(f"❌ Ошибка при превью: {e}")
 
@@ -230,7 +233,9 @@ class LabelMakerApp(QtWidgets.QMainWindow):
                 pixmap = QtGui.QPixmap.fromImage(image_qt)
                 self.image_label.setPixmap(pixmap.scaled(self.image_label.size(), QtCore.Qt.KeepAspectRatio))
         except DatabaseConnectionError as exc:
+            # Показываем ошибку подключения и логируем её.
             QtWidgets.QMessageBox.critical(self, "Ошибка БД", str(exc))
+            self.log_output.append(f"❌ Ошибка БД: {exc}")
         except Exception as e:
             self.log_output.append(f"❌ Ошибка при превью: {e}")
 
