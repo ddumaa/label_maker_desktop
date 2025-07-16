@@ -11,6 +11,8 @@ Desktop application for generating product labels using PyQt5 and ReportLab.
 python install_dependencies.py
 ```
 
+3. pdf2image requires Poppler. Install it via your package manager (e.g., `apt-get install poppler-utils`).
+
 The application settings are stored in `settings.json` and database
 configuration in `db_config.json`.
 
