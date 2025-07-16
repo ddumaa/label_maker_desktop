@@ -1,0 +1,10 @@
+{
+  "host": "localhost",
+  "port": 3306,
+  "user": "user",
+  "password": "pass",
+  "database": "mydb",
+  "persistent": true,
+  "pool_size": 0,
+  "max_retries": 3
+}
