@@ -69,7 +69,10 @@ class DatabaseService:
             ) from _IMPORT_ERROR
 
     def _connect(self):
-        """Return a MySQL connection using stored configuration.
+        """Create a MySQL connection using stored configuration.
+
+        Оборачивает ``mysql.connector.connect`` и превращает ошибки
+        подключения в :class:`DatabaseConnectionError`.
 
         Raises
         ------
@@ -89,30 +92,24 @@ class DatabaseService:
 
     def check_connection(self) -> None:
         """Проверить корректность параметров подключения."""
-        self._ensure_connector()
-
         try:
             logger.debug("Checking database connection")
-            with mysql.connector.connect(**self._db_config):
+            with self._connect():
                 logger.debug("Database connection successful")
-        except mysql.connector.Error as exc:
-            raise DatabaseConnectionError(
-                f"Не удалось подключиться к базе данных: {exc}"
-            ) from exc
+        except DatabaseConnectionError:
+            raise
 
     def get_term_labels(self, term_slugs: Iterable[str]) -> Dict[str, str]:
         """\
         Возвращает словарь ``slug -> название`` для переданных slug'ов.
         Возвращается пустой словарь, если ``term_slugs`` пуст.
         """
-        self._ensure_connector()
-
         if not term_slugs:
             return {}
 
         try:
             logger.debug("Fetching term labels: %s", term_slugs)
-            with mysql.connector.connect(**self._db_config) as conn:
+            with self._connect() as conn:
                 with conn.cursor() as cursor:
                     # Формируем SQL-запрос для выборки терминов
                     placeholders = ",".join(["%s"] * len(term_slugs))
@@ -135,14 +132,12 @@ class DatabaseService:
         Получает данные товаров для указанных SKU.
         Возвращает словарь ``product_id -> данные``.
         """
-        self._ensure_connector()
-
         if not skus:
             return {}
 
         try:
             logger.debug("Fetching products for SKUs: %s", skus)
-            with mysql.connector.connect(**self._db_config) as conn:
+            with self._connect() as conn:
                 with conn.cursor(dictionary=True) as cursor:
                     placeholders = ",".join(["%s"] * len(skus))
                     # Загружаем вариации продуктов с указанными SKU
