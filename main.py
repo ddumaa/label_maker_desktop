@@ -195,13 +195,16 @@ class LabelMakerApp(QtWidgets.QMainWindow):
             self.preview_selected_sku()
 
     def show_label_preview(self, sku):
-        """Preview a single label for ``sku``."""
+        """Preview a single label for ``sku`` and clean up the temporary PDF."""
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
                 pdf_path = tmp_pdf.name
 
             generate_preview_pdf(pdf_path, sku, self.settings, self.db_config, generate_labels_entry)
             image = convert_pdf_to_image(pdf_path)
+            # Удаляем временный PDF-файл после конвертации,
+            # чтобы не оставлять лишних файлов на диске
+            os.unlink(pdf_path)
             if image:
                 image_qt = QtGui.QImage(image.tobytes("raw", "RGB"), image.width, image.height, QtGui.QImage.Format_RGB888)
                 pixmap = QtGui.QPixmap.fromImage(image_qt)
@@ -212,7 +215,7 @@ class LabelMakerApp(QtWidgets.QMainWindow):
             self.log_output.append(f"❌ Ошибка при превью: {e}")
 
     def show_page_preview(self, sku):
-        """Preview a full page filled with the same SKU."""
+        """Preview a full page filled with the same SKU and clean up the temporary PDF."""
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_pdf:
                 pdf_path = tmp_pdf.name
@@ -220,6 +223,8 @@ class LabelMakerApp(QtWidgets.QMainWindow):
             count = self.settings.get("labels_per_page", 3)
             generate_preview_pdf(pdf_path, [sku] * count, self.settings, self.db_config, generate_labels_entry)
             image = convert_pdf_to_image(pdf_path)
+            # После конвертации удаляем временный файл превью
+            os.unlink(pdf_path)
             if image:
                 image_qt = QtGui.QImage(image.tobytes("raw", "RGB"), image.width, image.height, QtGui.QImage.Format_RGB888)
                 pixmap = QtGui.QPixmap.fromImage(image_qt)
