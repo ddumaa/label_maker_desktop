@@ -117,19 +117,28 @@ class DatabaseService:
     def _acquire_connection(self):
         """Получить соединение из пула, постоянное или новое."""
         if self._pool is not None:
+            logger.debug("Acquire connection from pool")
             return self._pool.get_connection()
         if self._persistent:
             if self._connection is None or not self._connection.is_connected():
+                logger.debug("Open persistent connection")
                 self._connection = mysql.connector.connect(**self._db_config)
+            else:
+                logger.debug("Reuse persistent connection")
             return self._connection
+        logger.debug("Open transient connection")
         return mysql.connector.connect(**self._db_config)
 
     def _release_connection(self, conn) -> None:
         """Закрыть или вернуть соединение в пул."""
         if self._pool is not None:
+            logger.debug("Return connection to pool")
             conn.close()
         elif not self._persistent:
+            logger.debug("Close transient connection")
             conn.close()
+        else:
+            logger.debug("Keep persistent connection open")
 
     def _get_connection_with_retry(self):
         """Подключение с учётом настроек повторов при ошибках."""
@@ -137,7 +146,9 @@ class DatabaseService:
         for attempt in range(1, attempts + 1):
             try:
                 logger.debug("Opening MySQL connection (attempt %s)", attempt)
-                return self._acquire_connection()
+                conn = self._acquire_connection()
+                logger.debug("MySQL connection opened")
+                return conn
             except mysql.connector.Error as exc:
                 if attempt < attempts and self._is_transient_error(exc):
                     logger.warning("Transient DB error: %s", exc)
@@ -151,10 +162,12 @@ class DatabaseService:
     def _connect(self):
         """Контекстный менеджер получения соединения с учётом пула и повторов."""
         self._ensure_connector()
+        logger.debug("Acquire DB connection")
         conn = self._get_connection_with_retry()
         try:
             yield conn
         finally:
+            logger.debug("Release DB connection")
             self._release_connection(conn)
 
     def check_connection(self) -> None:

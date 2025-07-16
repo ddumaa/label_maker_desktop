@@ -319,12 +319,14 @@ class LabelMakerApp(QtWidgets.QMainWindow):
         логируются, что упрощает диагностику проблем.
         """
         try:
+            logger.debug("Initializing DatabaseService for status check")
             service = DatabaseService(self.db_config)
             service.check_connection()
             self.db_status_label.setText("🟢 Подключено к БД")
             self.db_status_label.setStyleSheet("color: green;")
             return True
         except DatabaseConnectionError:
+            logger.error("Database connection failed")
             self.db_status_label.setText("🔴 Нет подключения к БД")
             self.db_status_label.setStyleSheet("color: red;")
             return False
