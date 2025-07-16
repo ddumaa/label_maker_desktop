@@ -5,10 +5,10 @@ Desktop application for generating product labels using PyQt5 and ReportLab.
 ## Installation
 
 1. Ensure you have Python installed.
-2. Install dependencies:
+2. Install dependencies by running the provided helper script **before the first launch**:
 
 ```bash
-pip install -r requirements.txt
+python install_dependencies.py
 ```
 
 The application settings are stored in `settings.json` and database
