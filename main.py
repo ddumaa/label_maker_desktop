@@ -3,10 +3,12 @@ import sys
 import os
 import json
 import tempfile
+import logging
 
 from logging_setup import configure_logging
 
 configure_logging()
+logger = logging.getLogger(__name__)
 
 try:
     import mysql.connector
@@ -313,7 +315,8 @@ class LabelMakerApp(QtWidgets.QMainWindow):
 
         Возвращает ``True`` при успешном соединении, иначе ``False``.
         Метод реализует отдельную ответственность — проверку состояния БД
-        и обновление визуального статуса.
+        и обновление визуального статуса. Любые непредвиденные ошибки
+        логируются, что упрощает диагностику проблем.
         """
         try:
             service = DatabaseService(self.db_config)
@@ -326,6 +329,7 @@ class LabelMakerApp(QtWidgets.QMainWindow):
             self.db_status_label.setStyleSheet("color: red;")
             return False
         except Exception:
+            logger.exception("Unexpected error while checking DB connection")
             self.db_status_label.setText("🔴 Нет подключения к БД")
             self.db_status_label.setStyleSheet("color: red;")
             return False
