@@ -212,12 +212,14 @@ def extract_other_attributes(meta: dict, exclude_keys: list[str], slug_to_label:
 
 def get_product_quantity(product: dict, use_stock_quantity: bool = True) -> int:
     """Возвращает количество этикеток, которое нужно напечатать."""
-    if not use_stock_quantity:
-        return 1
-    raw_qty = product['meta'].get('_stock', '1')
     try:
+        if not use_stock_quantity:
+            return 1
+        meta = product.get('meta', {})
+        raw_qty = meta.get('_stock', '1')
         return int(float(raw_qty)) if raw_qty else 1
-    except ValueError:
+    except Exception as e:
+        logger.warning(f"[WARN] Ошибка при определении количества: {e}")
         return 1
 
 
@@ -469,6 +471,7 @@ class LabelGenerator:
         # Предупреждение о пути сгенерированного PDF-файла.
         logger.warning("Сгенерировано: %s", self.output_file)
 
+    logger.debug("▶ Запуск генерации: %s", skus)
     def generate_labels_entry(self, skus: list[str]) -> None:
         """\
         Точка входа для генерации этикеток по списку SKU.
